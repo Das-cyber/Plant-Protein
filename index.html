@@ -390,14 +390,13 @@ tbody td{padding:12px 14px;font-size:11px;vertical-align:middle;white-space:nowr
 <div class="tab-panel" id="panel-history">
 
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-    <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);letter-spacing:1px;text-transform:uppercase">Showing:</span>
-    <div style="display:flex;gap:4px">
-      <button onclick="CFG.packSize='any';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">All</button>
-      <button onclick="CFG.packSize='500g';renderHistoryTab()" class="ps-btn" style="font-size:10px;padding:3px 10px">500g</button>
-      <button onclick="CFG.packSize='1kg';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">1 kg</button>
-      <button onclick="CFG.packSize='2kg';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">2 kg</button>
+    <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);letter-spacing:1px;text-transform:uppercase">Filter:</span>
+    <div style="display:flex;gap:4px" id="hist-size-btns">
+      <button onclick="setHistPack('any')"  class="ps-btn ps-active" data-hsize="any">All sizes</button>
+      <button onclick="setHistPack('500g')" class="ps-btn" data-hsize="500g">500g only</button>
+      <button onclick="setHistPack('1kg')"  class="ps-btn" data-hsize="1kg">1kg only</button>
     </div>
-    <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace">Only fetches matching selected size are shown</span>
+    <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace" id="hist-size-note">Showing all fetches across all sizes</span>
   </div>
   <div class="charts-grid" style="margin-bottom:20px">
     <div class="chart-card full">
@@ -807,38 +806,27 @@ function loadHistory() {
   try { history = JSON.parse(localStorage.getItem('pp_history')||'[]'); } catch(e){history=[];}
 }
 function loadHistoryForPack(pack) {
-  // ALWAYS include global history as base — migrate old untagged entries
-  var all = history.slice();
-
   if (!pack || pack === 'any') {
-    return all; // show everything in 'All sizes' view
+    // All view: return all history sorted by time
+    return history.slice().sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
   }
 
-  // Try pack-specific store first
+  // Try pack-specific localStorage first
   var packSpecific = [];
-  try {
-    packSpecific = JSON.parse(localStorage.getItem('pp_history_' + pack)||'[]');
-  } catch(e){}
+  try { packSpecific = JSON.parse(localStorage.getItem('pp_history_'+pack)||'[]'); } catch(e){}
 
-  // Also filter global history for this pack size
-  var fromGlobal = all.filter(function(h){
-    return h.packSize === pack;
+  // Also check global history for matching pack tags
+  var fromGlobal = history.filter(function(h){ return h.packSize === pack; });
+
+  // Merge + deduplicate by timestamp
+  var seen = {}, merged = [];
+  packSpecific.concat(fromGlobal).forEach(function(h){
+    if (!seen[h.ts]) { seen[h.ts]=true; merged.push(h); }
   });
+  merged.sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
 
-  // Merge, deduplicate by timestamp
-  var merged = packSpecific.concat(fromGlobal);
-  var seen = {};
-  merged = merged.filter(function(h){
-    if (seen[h.ts]) return false;
-    seen[h.ts] = true;
-    return true;
-  });
-
-  // Sort by time
-  merged.sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
-
-  // If still nothing, return all history so charts aren't blank
-  return merged.length >= 2 ? merged : all;
+  // STRICT: only return if we actually have this size's data
+  return merged;
 }
 function appendHistory(data) {
   const rev = data.map(p=>estimateRevenue(p.price,p.bsr).monthly);
@@ -1201,7 +1189,7 @@ async function enrichBSR() {
     var withBsr = products.filter(function(p){return p.bsr>0;}).length;
     setStatus('live', 'Live · '+products.length+' products · '+withBsr+' BSR');
 
-    // Update the LAST history entry with the enriched BSR/revenue data
+    // Update LAST history entry with enriched BSR + recalculated revenue
     if (history.length > 0) {
       var lastSnap = history[history.length - 1];
       products.forEach(function(p) {
@@ -1209,8 +1197,19 @@ async function enrichBSR() {
         if (item) {
           item.bsr = p.bsr;
           item.rev = estimateRevenue(p.price, p.bsr).monthly;
+          item.price = p.price;
+          item.rating = p.rating;
+          item.reviews = p.reviews;
         }
       });
+      // Also update pack-specific history store
+      var packKey = 'pp_history_' + (lastSnap.packSize || 'any');
+      var packHist = [];
+      try { packHist = JSON.parse(localStorage.getItem(packKey)||'[]'); } catch(e){}
+      var pIdx = packHist.findIndex(function(h){ return h.ts === lastSnap.ts; });
+      if (pIdx >= 0) packHist[pIdx] = lastSnap;
+      else packHist.push(lastSnap);
+      localStorage.setItem(packKey, JSON.stringify(packHist));
       localStorage.setItem('pp_history', JSON.stringify(history));
     }
 
@@ -1309,6 +1308,20 @@ async function manualSync() {
   console.log('[manualSync] Sheet URL check: open', CFG.sheetsUrl.replace('/exec',''), 'to verify deployment');
 }
 
+function setHistPack(pack) {
+  document.querySelectorAll('[data-hsize]').forEach(function(b){
+    b.classList.toggle('ps-active', b.getAttribute('data-hsize') === pack);
+  });
+  var note = pack === 'any' ? 'Showing all fetches across all sizes' : 'Showing only ' + pack + ' fetches';
+  var el = document.getElementById('hist-size-note');
+  if (el) el.textContent = note;
+  // Temporarily set CFG.packSize for filter, then restore
+  var prev = CFG.packSize;
+  CFG.packSize = pack;
+  renderHistoryTab();
+  CFG.packSize = prev;
+}
+
 function Logger() {}
 Logger.log = function(msg) { console.log('[PlantPulse]', msg); };
 
@@ -1370,13 +1383,13 @@ async function syncToSheets() {
   if (!products.length) { toast('No data to sync', 'error'); return; }
   setSyncStatus('syncing');
 
-  // fireGet: loads URL as image — bypasses ALL CORS/redirect issues
+  // fireGet: loads URL as image — bypasses ALL CORS issues
   function fireGet(url) {
     return new Promise(function(resolve) {
       var img = new Image();
       img.onload = img.onerror = function() { resolve(); };
       img.src = url;
-      setTimeout(resolve, 2000); // max 2s per call
+      setTimeout(resolve, 3000);
     });
   }
 
@@ -1384,34 +1397,63 @@ async function syncToSheets() {
     var pack = (CFG.packSize && CFG.packSize !== 'any') ? CFG.packSize : 'All';
     var ts   = new Date().toLocaleString('en-IN');
     var base = CFG.sheetsUrl;
+    var HEADER = ['Brand','Pack Size','Price (INR)','Discount %','Rating','Reviews','BSR','Est. Revenue/mo (INR)','Fetched At'];
 
-    // Step 1: clear sheet
-    await fireGet(base + '?action=clear&sheet=LiveData');
-    await sleep(400);
-
-    // Step 2: write header
-    var header = ['Brand','Pack Size','Price','Discount%','Rating','Reviews','BSR','Est.Rev/mo','Fetched At'];
-    await fireGet(base + '?action=header&sheet=LiveData&data=' + encodeURIComponent(JSON.stringify(header)));
-    await sleep(400);
-
-    // Step 3: append each product row
-    for (var i = 0; i < products.length; i++) {
-      var p   = products[i];
+    function buildRow(p) {
       var ps  = detectPackSize(p.name);
       var rev = estimateRevenue(p.price, p.bsr);
-      var row = [
-        p.brand,
-        ps ? ps.display : pack,
-        p.price   || 0,
-        p.disc    || 0,
-        p.rating  || 0,
-        p.reviews || 0,
-        p.bsr     || 0,
-        rev.monthly || 0,
-        ts
-      ];
-      await fireGet(base + '?action=append&sheet=LiveData&data=' + encodeURIComponent(JSON.stringify(row)));
+      return [p.brand, ps?ps.display:pack, p.price||0, p.disc||0, p.rating||0, p.reviews||0, p.bsr||0, rev.monthly||0, ts];
+    }
+
+    // Helper: write to a specific sheet tab
+    async function writeToSheet(sheetName, rows) {
+      await fireGet(base + '?action=clear&sheet=' + encodeURIComponent(sheetName));
       await sleep(300);
+      await fireGet(base + '?action=header&sheet=' + encodeURIComponent(sheetName) + '&data=' + encodeURIComponent(JSON.stringify(HEADER)));
+      await sleep(300);
+      for (var i = 0; i < rows.length; i++) {
+        await fireGet(base + '?action=append&sheet=' + encodeURIComponent(sheetName) + '&data=' + encodeURIComponent(JSON.stringify(rows[i])));
+        await sleep(200);
+      }
+    }
+
+    // Helper: append to history sheet (never clears — accumulates)
+    async function appendToHistory(sheetName, rows) {
+      // Write header only if sheet is new
+      await fireGet(base + '?action=ensureHeader&sheet=' + encodeURIComponent(sheetName) + '&data=' + encodeURIComponent(JSON.stringify(HEADER)));
+      await sleep(300);
+      for (var i = 0; i < rows.length; i++) {
+        await fireGet(base + '?action=append&sheet=' + encodeURIComponent(sheetName) + '&data=' + encodeURIComponent(JSON.stringify(rows[i])));
+        await sleep(200);
+      }
+    }
+
+    var rows = products.map(buildRow);
+
+    // 1. Always write to LiveData (current snapshot)
+    toast('Syncing LiveData...', 'success');
+    await writeToSheet('LiveData', rows);
+
+    // 2. Append to size-specific history sheets
+    if (pack === '500g' || pack === 'All') {
+      var rows500 = products.filter(function(p){
+        var ps = detectPackSize(p.name);
+        return ps && Math.abs(ps.grams - 500) <= 50;
+      }).map(buildRow);
+      if (rows500.length > 0) {
+        toast('Saving 500g history...', 'success');
+        await appendToHistory('History_500g', rows500);
+      }
+    }
+    if (pack === '1kg' || pack === 'All') {
+      var rows1kg = products.filter(function(p){
+        var ps = detectPackSize(p.name);
+        return ps && Math.abs(ps.grams - 1000) <= 100;
+      }).map(buildRow);
+      if (rows1kg.length > 0) {
+        toast('Saving 1kg history...', 'success');
+        await appendToHistory('History_1kg', rows1kg);
+      }
     }
 
     if (history.length) {
@@ -1419,7 +1461,7 @@ async function syncToSheets() {
       localStorage.setItem('pp_history', JSON.stringify(history));
     }
     setSyncStatus('synced');
-    toast('Synced ' + products.length + ' rows to Google Sheets!', 'success');
+    toast('Synced to Google Sheets!', 'success');
 
   } catch(e) {
     setSyncStatus('error');
@@ -1427,6 +1469,7 @@ async function syncToSheets() {
     console.error('[syncToSheets]', e);
   }
 }
+
 
 
 // Post to Google Apps Script Web App
