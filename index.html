@@ -806,17 +806,38 @@ function getSaved() {
 function loadHistory() {
   try { history = JSON.parse(localStorage.getItem('pp_history')||'[]'); } catch(e){history=[];}
 }
+function loadHistoryForPack(pack) {
+  if (!pack || pack === 'any') {
+    // Return only snapshots tagged as 'any' or untagged
+    return history.filter(function(h){ return !h.packSize || h.packSize === 'any'; });
+  }
+  try {
+    var stored = JSON.parse(localStorage.getItem('pp_history_' + pack)||'[]');
+    if (stored.length > 0) return stored;
+    // Fallback: filter global history
+    return history.filter(function(h){ return h.packSize === pack; });
+  } catch(e) { return []; }
+}
 function appendHistory(data) {
   const rev = data.map(p=>estimateRevenue(p.price,p.bsr).monthly);
+  const pack = CFG.packSize || 'any';
   const snap = {
     ts: new Date().toISOString(),
-    packSize: CFG.packSize || 'any',
+    packSize: pack,
     items: data.map((p,i) => ({
       brand:p.brand, price:p.price, rating:p.rating,
       reviews:p.reviews, bsr:p.bsr, rev:rev[i]
     })),
     synced: false
   };
+  // Store per pack size key
+  var key = 'pp_history_' + pack;
+  var packHistory = [];
+  try { packHistory = JSON.parse(localStorage.getItem(key)||'[]'); } catch(e){}
+  packHistory.push(snap);
+  if (packHistory.length > 180) packHistory = packHistory.slice(-180);
+  localStorage.setItem(key, JSON.stringify(packHistory));
+  // Also keep global history for backwards compat
   history.push(snap);
   if (history.length > 180) history = history.slice(-180);
   localStorage.setItem('pp_history', JSON.stringify(history));
@@ -1323,73 +1344,53 @@ function pNum(v) { if (typeof v==='number') return v; return parseFloat(String(v
 // GOOGLE SHEETS SYNC
 // ═══════════════════════════════════════════════════
 async function syncToSheets() {
-  if (!CFG.sheetsUrl) return;
+  if (!CFG.sheetsUrl) { toast('Add Apps Script URL in Settings first', 'error'); return; }
   setSyncStatus('syncing');
   try {
     var pack = (CFG.packSize && CFG.packSize !== 'any') ? CFG.packSize : 'All';
     var ts   = new Date().toLocaleString('en-IN');
 
-    // Single clean table — one row per product
     var rows = [[
       'Brand', 'Pack Size', 'Price (INR)', 'Discount %',
       'Rating', 'Reviews', 'BSR', 'Est. Revenue/mo (INR)', 'Fetched At'
     ]];
-
     products.forEach(function(p) {
       var ps  = detectPackSize(p.name);
       var rev = estimateRevenue(p.price, p.bsr);
       rows.push([
-        p.brand,
-        ps ? ps.display : pack,
-        p.price   || '',
-        p.disc    || 0,
-        p.rating  || '',
-        p.reviews || 0,
-        p.bsr     || '',
-        rev.monthly || '',
-        ts
+        p.brand, ps ? ps.display : pack,
+        p.price||0, p.disc||0, p.rating||0,
+        p.reviews||0, p.bsr||0, rev.monthly||0, ts
       ]);
     });
 
-    console.log('[Sheets] Sending to:', CFG.sheetsUrl);
-    console.log('[Sheets] Rows:', rows.length, '| Sample:', JSON.stringify(rows[1]));
+    var payload = JSON.stringify({ action:'write', sheet:'LiveData', values:rows });
+    console.log('[Sheets] POST to:', CFG.sheetsUrl);
+    console.log('[Sheets] Payload size:', payload.length, 'chars');
+    console.log('[Sheets] Sample row:', JSON.stringify(rows[1]));
 
-    var payload = JSON.stringify({ action: 'write', sheet: 'LiveData', values: rows });
+    // Google Apps Script Web Apps on github.io: use no-cors
+    // The request WILL arrive — we just can't read the response
+    // To verify: open your Apps Script URL in browser, should show "PlantPulse connected"
+    await fetch(CFG.sheetsUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: payload
+    });
 
-    // Try regular fetch first (works on HTTPS like GitHub Pages)
-    var sent = false;
-    try {
-      var r = await fetch(CFG.sheetsUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: payload
-      });
-      var txt = await r.text();
-      console.log('[Sheets] Response:', r.status, txt);
-      if (txt === 'ok' || r.ok) { sent = true; console.log('[Sheets] Write successful!'); }
-      else { console.warn('[Sheets] Unexpected response:', txt); }
-    } catch(corsErr) {
-      console.warn('[Sheets] Regular fetch failed (CORS?), trying no-cors:', corsErr.message);
+    console.log('[Sheets] Request fired. Check your Google Sheet in 5 seconds.');
+    console.log('[Sheets] If sheet is empty, verify: 1) URL is correct 2) Deployed as "Anyone" 3) Open URL in browser shows PlantPulse connected');
+
+    if (history.length) {
+      history[history.length-1].synced = true;
+      localStorage.setItem('pp_history', JSON.stringify(history));
     }
-
-    // Fallback to no-cors if regular fetch failed
-    if (!sent) {
-      await fetch(CFG.sheetsUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: payload
-      });
-      console.log('[Sheets] Sent via no-cors fallback');
-    }
-
-    if (history.length) history[history.length-1].synced = true;
-    localStorage.setItem('pp_history', JSON.stringify(history));
     setSyncStatus('synced');
-    toast('Synced to Google Sheets', 'success');
+    toast('Sync request sent — check your sheet in 5 seconds', 'success');
   } catch(e) {
     setSyncStatus('error');
-    toast('Sheets sync failed: ' + e.message, 'error');
+    toast('Sheets error: ' + e.message, 'error');
     console.error('[syncToSheets]', e);
   }
 }
@@ -1663,33 +1664,33 @@ function renderHistoryTab() {
     return;
   }
 
-  // ── Group history by pack size for clean charts ───────────────────────
-  // Get selected pack size from current filter
+  // ── Load pack-specific history ───────────────────────────────────────────
   var activePack = CFG.packSize || 'any';
+  var filteredHistory = loadHistoryForPack(activePack);
 
-  // Filter history to matching pack size (or use all if 'any')
-  var filteredHistory = history.filter(function(h) {
-    if (activePack === 'any') return true;
-    return !h.packSize || h.packSize === activePack || h.packSize === 'any';
-  });
-
-  // NO fallback — if fewer than 2 fetches for this size, show empty message
   if (filteredHistory.length < 2) {
-    ['c-trend-price','c-trend-reviews','c-trend-rev'].forEach(function(id) {
-      var wrap = document.getElementById('wrap-c-' + id.replace('c-',''));
-      if (!wrap) wrap = document.getElementById('wrap-' + id.replace('c-',''));
-      if (wrap) wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:12px;flex-direction:column;gap:8px"><div style="font-size:28px">📈</div><div>Not enough ' + activePack + ' fetches yet — run Refresh with this size selected</div></div>';
+    var msg = activePack === 'any'
+      ? 'Run Refresh a few times to build history'
+      : 'No ' + activePack + ' history yet — select ' + activePack + ' in Pack Size and click Refresh';
+    ['wrap-c-trend-price','wrap-tp','wrap-tr','wrap-tv'].forEach(function(wid) {
+      var wrap = document.getElementById(wid);
+      if (wrap) wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:12px;flex-direction:column;gap:8px"><div style="font-size:28px">📈</div><div>' + msg + '</div></div>';
     });
     return;
   }
 
-  // Get top 5 brands from CURRENT products (most relevant)
-  var top5 = products.length > 0
-    ? products.slice(0,5).map(function(p){return p.brand;})
-    : filteredHistory[filteredHistory.length-1].items.slice(0,5).map(function(p){return p.brand;});
-
-  // Deduplicate brands
-  top5 = top5.filter(function(b,i){return top5.indexOf(b)===i;}).slice(0,5);
+  // Get top 10 brands from the most recent filtered fetch
+  var lastSnap = filteredHistory[filteredHistory.length - 1];
+  var top10 = lastSnap.items.map(function(p){ return p.brand; });
+  // Also include current products brands
+  if (products.length > 0) {
+    products.forEach(function(p){
+      if (top10.indexOf(p.brand) === -1) top10.push(p.brand);
+    });
+  }
+  // Deduplicate, max 10
+  top10 = top10.filter(function(b,i){ return top10.indexOf(b) === i; }).slice(0, 10);
+  var top5 = top10; // use all 10
 
   var COLORS = ['#00e5a0','#f5a623','#4da6ff','#ff4d6d','#b18cfe'];
   var labels = filteredHistory.map(function(h) {
