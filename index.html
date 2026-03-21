@@ -297,7 +297,6 @@ tbody td{padding:12px 14px;font-size:11px;vertical-align:middle;white-space:nowr
       <button onclick="switchPackSize('any')"  class="ps-btn" data-size="any">All</button>
       <button onclick="switchPackSize('500g')" class="ps-btn" data-size="500g">500g</button>
       <button onclick="switchPackSize('1kg')"  class="ps-btn ps-active" data-size="1kg">1 kg</button>
-      <button onclick="switchPackSize('1.5kg')" class="ps-btn" data-size="1.5kg">1.5 kg</button>
       <button onclick="switchPackSize('2kg')"  class="ps-btn" data-size="2kg">2 kg</button>
     </div>
     <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3)" id="packsize-status"></span>
@@ -392,7 +391,7 @@ tbody td{padding:12px 14px;font-size:11px;vertical-align:middle;white-space:nowr
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
     <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);letter-spacing:1px;text-transform:uppercase">Filter:</span>
     <div style="display:flex;gap:4px" id="hist-size-btns">
-      <button onclick="setHistPack('any')"  class="ps-btn ps-active" data-hsize="any">All sizes</button>
+      <button onclick="setHistPack('any')"  class="ps-btn ps-active" data-hsize="any">All</button>
       <button onclick="setHistPack('500g')" class="ps-btn" data-hsize="500g">500g only</button>
       <button onclick="setHistPack('1kg')"  class="ps-btn" data-hsize="1kg">1kg only</button>
     </div>
@@ -663,7 +662,6 @@ function doGet(e) {
           <option value="any">Any size (no filter)</option>
           <option value="500g">500g only</option>
           <option value="1kg" selected>1 kg only</option>
-          <option value="1.5kg">1.5 kg only</option>
           <option value="2kg">2 kg only</option>
           <option value="5kg">5 kg only</option>
         </select>
@@ -1458,48 +1456,39 @@ async function syncToSheets() {
       return [p.brand, packLabel, p.price||0, p.disc||0, p.rating||0, p.reviews||0, p.bsr||0, rev.monthly||0, ts];
     }
 
-    // ── Sheet 1: LiveData — always current, overwrite ──────────────────
-    toast('Writing LiveData...', 'success');
-    await sheetHeader('LiveData', HDR); // init = clear + header in one call
+    // ── Sheet 1: LiveData ────────────────────────────────────────────────
+    console.log('[Sheets] Writing LiveData header...');
+    await sheetHeader('LiveData', HDR);
     for (var i=0; i<products.length; i++) {
       await sheetAppend('LiveData', makeRow(products[i]));
     }
+    toast('LiveData done. Writing history sheets...', 'success');
+    await sleep(400);
 
-    // ── Sheet 2: History_500g — append 500g products only ─────────────
-    // 500g: match 400g-600g range
-    var prods500 = products.filter(function(p){
-      var ps = detectPackSize(p.name);
-      return ps && ps.grams >= 400 && ps.grams <= 600;
-    });
-    // If none detected, try current pack size filter
-    if (prods500.length === 0 && CFG.packSize === '500g') {
-      prods500 = products.slice();
-    }
+    // ── Sheet 2: History_500g ─────────────────────────────────────────
+    var activePack = CFG.packSize || 'any';
+    var prods500 = (activePack === '500g')
+      ? products.slice()
+      : products.filter(function(p){ var ps=detectPackSize(p.name); return ps&&ps.grams>=400&&ps.grams<=600; });
     if (prods500.length > 0) {
+      console.log('[Sheets] Writing History_500g:', prods500.length, 'rows');
       await sheetEnsureHeader('History_500g', HDR);
-      for (var j=0; j<prods500.length; j++) {
-        await sheetAppend('History_500g', makeRow(prods500[j]));
-      }
+      for (var j=0; j<prods500.length; j++) { await sheetAppend('History_500g', makeRow(prods500[j])); }
     }
+    await sleep(300);
 
-    // ── Sheet 3: History_1kg — append 1kg products only ───────────────
-    // 1kg: match 850g-1150g range
-    var prods1kg = products.filter(function(p){
-      var ps = detectPackSize(p.name);
-      return ps && ps.grams >= 850 && ps.grams <= 1150;
-    });
-    // If none detected, try current pack size filter
-    if (prods1kg.length === 0 && CFG.packSize === '1kg') {
-      prods1kg = products.slice();
-    }
+    // ── Sheet 3: History_1kg ──────────────────────────────────────────
+    var prods1kg = (activePack === '1kg')
+      ? products.slice()
+      : products.filter(function(p){ var ps=detectPackSize(p.name); return ps&&ps.grams>=850&&ps.grams<=1150; });
     if (prods1kg.length > 0) {
+      console.log('[Sheets] Writing History_1kg:', prods1kg.length, 'rows');
       await sheetEnsureHeader('History_1kg', HDR);
-      for (var k=0; k<prods1kg.length; k++) {
-        await sheetAppend('History_1kg', makeRow(prods1kg[k]));
-      }
+      for (var k=0; k<prods1kg.length; k++) { await sheetAppend('History_1kg', makeRow(prods1kg[k])); }
     }
+    await sleep(300);
 
-    if (history.length) {
+        if (history.length) {
       history[history.length-1].synced = true;
       localStorage.setItem('pp_history', JSON.stringify(history));
     }
