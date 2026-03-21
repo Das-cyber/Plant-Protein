@@ -494,22 +494,22 @@ tbody td{padding:12px 14px;font-size:11px;vertical-align:middle;white-space:nowr
     if (data.action === 'write') {
       sheet.clearContents();
       if (data.values && data.values.length > 0) {
-        sheet.getRange(1, 1, data.values.length, data.values[0].length).setValues(data.values);
-        // Bold the header row
-        sheet.getRange(1, 1, 1, data.values[0].length).setFontWeight('bold').setBackground('#E8F5E9');
+        sheet.getRange(1,1,data.values.length,data.values[0].length).setValues(data.values);
+        sheet.getRange(1,1,1,data.values[0].length).setFontWeight('bold').setBackground('#C8E6C9');
+        sheet.autoResizeColumns(1, data.values[0].length);
       }
     } else if (data.action === 'append') {
       sheet.appendRow(data.row);
-    } else if (data.action === 'ensureHeaders') {
-      if (sheet.getLastRow() === 0) {
-        sheet.appendRow(data.row);
-        sheet.getRange(1, 1, 1, data.row.length).setFontWeight('bold').setBackground('#E8F5E9');
-      }
     }
-    return ContentService.createTextOutput('ok');
+    var output = ContentService.createTextOutput('ok');
+    output.setMimeType(ContentService.MimeType.TEXT);
+    return output;
   } catch(err) {
     return ContentService.createTextOutput('error: ' + err.message);
   }
+}
+function doGet(e) {
+  return ContentService.createTextOutput('PlantPulse connected');
 }</div>
           </div>
         </div>
@@ -752,7 +752,7 @@ window.addEventListener('load', async () => {
 // ═══════════════════════════════════════════════════
 const DEFAULTS = {
   apiKey:'apify_api_sXiL5OFbxynFHq2ZhoxET9iLRqckqP2v1Vcy',
-  rapidKey:'dccc09f657msh02554c96cf4afa8p116988jsnf22cc338dab7',   // RapidAPI key
+  rapidKey:'75a905c4aamsh1b44898dfbf2e35p189516jsnf2d107ea1353',   // RapidAPI key
   query:'plant protein powder india', maxItems:10, domain:'amazon.in',
   interval:21600, sheetsUrl:'',  // Google Apps Script Web App URL
   schedHourly:false, sched6h:true, schedDaily:false, schedSheets:true
