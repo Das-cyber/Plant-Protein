@@ -895,6 +895,7 @@ async function doFetch() {
 
     saveProd(products);
     appendHistory(products);
+    localStorage.setItem('pp_last_fetch_idx', String(history.length - 1));
     renderAll();
     renderHistoryTab();
 
@@ -1151,13 +1152,27 @@ async function enrichBSR() {
 
     saveProd(products);
     renderAll();
-    appendHistory(products);
+    // NOTE: Do NOT call appendHistory here — enrichBSR only enriches existing data,
+    // it does NOT create a new history snapshot (that causes the price wave bug)
 
     var withBsr = products.filter(function(p){return p.bsr>0;}).length;
     setStatus('live', 'Live · '+products.length+' products · '+withBsr+' BSR');
 
+    // Update the LAST history entry with the enriched BSR/revenue data
+    if (history.length > 0) {
+      var lastSnap = history[history.length - 1];
+      products.forEach(function(p) {
+        var item = lastSnap.items.find(function(x){ return x.brand === p.brand; });
+        if (item) {
+          item.bsr = p.bsr;
+          item.rev = estimateRevenue(p.price, p.bsr).monthly;
+        }
+      });
+      localStorage.setItem('pp_history', JSON.stringify(history));
+    }
+
     if (enriched > 0) {
-      toast('BSR fetched for ' + enriched + ' products! Table re-sorted by BSR rank.', 'success');
+      toast('BSR fetched for ' + enriched + ' products!', 'success');
     } else {
       toast('BSR still 0 — check Console (F12) for details.', 'error');
     }
@@ -1337,19 +1352,36 @@ async function syncToSheets() {
     });
 
     console.log('[Sheets] Sending to:', CFG.sheetsUrl);
-    console.log('[Sheets] Rows:', rows.length, '| First row:', JSON.stringify(rows[0]));
-    console.log('[Sheets] Sample data row:', JSON.stringify(rows[1]));
+    console.log('[Sheets] Rows:', rows.length, '| Sample:', JSON.stringify(rows[1]));
 
-    // Send with no-cors to avoid CORS preflight block from file://
-    // Apps Script Web Apps accept this — response will be opaque (we can't read it)
-    // but data WILL arrive at the sheet
-    await fetch(CFG.sheetsUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'write', sheet: 'LiveData', values: rows })
-    });
-    console.log('[Sheets] Request sent (no-cors — check your sheet for data)');
+    var payload = JSON.stringify({ action: 'write', sheet: 'LiveData', values: rows });
+
+    // Try regular fetch first (works on HTTPS like GitHub Pages)
+    var sent = false;
+    try {
+      var r = await fetch(CFG.sheetsUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: payload
+      });
+      var txt = await r.text();
+      console.log('[Sheets] Response:', r.status, txt);
+      if (txt === 'ok' || r.ok) { sent = true; console.log('[Sheets] Write successful!'); }
+      else { console.warn('[Sheets] Unexpected response:', txt); }
+    } catch(corsErr) {
+      console.warn('[Sheets] Regular fetch failed (CORS?), trying no-cors:', corsErr.message);
+    }
+
+    // Fallback to no-cors if regular fetch failed
+    if (!sent) {
+      await fetch(CFG.sheetsUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: payload
+      });
+      console.log('[Sheets] Sent via no-cors fallback');
+    }
 
     if (history.length) history[history.length-1].synced = true;
     localStorage.setItem('pp_history', JSON.stringify(history));
@@ -1641,7 +1673,15 @@ function renderHistoryTab() {
     return !h.packSize || h.packSize === activePack || h.packSize === 'any';
   });
 
-  if (filteredHistory.length < 2) filteredHistory = history; // fallback to all
+  // NO fallback — if fewer than 2 fetches for this size, show empty message
+  if (filteredHistory.length < 2) {
+    ['c-trend-price','c-trend-reviews','c-trend-rev'].forEach(function(id) {
+      var wrap = document.getElementById('wrap-c-' + id.replace('c-',''));
+      if (!wrap) wrap = document.getElementById('wrap-' + id.replace('c-',''));
+      if (wrap) wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:12px;flex-direction:column;gap:8px"><div style="font-size:28px">📈</div><div>Not enough ' + activePack + ' fetches yet — run Refresh with this size selected</div></div>';
+    });
+    return;
+  }
 
   // Get top 5 brands from CURRENT products (most relevant)
   var top5 = products.length > 0
