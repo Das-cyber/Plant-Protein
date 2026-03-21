@@ -508,7 +508,36 @@ tbody td{padding:12px 14px;font-size:11px;vertical-align:middle;white-space:nowr
   }
 }
 function doGet(e) {
-  return ContentService.createTextOutput('PlantPulse connected');
+  try {
+    if (!e.parameter || !e.parameter.action) {
+      return ContentService.createTextOutput('PlantPulse connected');
+    }
+    var ss    = SpreadsheetApp.getActiveSpreadsheet();
+    var sname = e.parameter.sheet || 'LiveData';
+    var sheet = ss.getSheetByName(sname) || ss.insertSheet(sname);
+    var act   = e.parameter.action;
+    var data  = e.parameter.data ? JSON.parse(decodeURIComponent(e.parameter.data)) : null;
+
+    if (act === 'clear') {
+      sheet.clearContents();
+    } else if (act === 'header') {
+      sheet.clearContents();
+      sheet.getRange(1,1,1,data.length).setValues([data]);
+      sheet.getRange(1,1,1,data.length).setFontWeight('bold').setBackground('#C8E6C9');
+      sheet.autoResizeColumns(1, data.length);
+    } else if (act === 'ensureHeader') {
+      if (sheet.getLastRow() === 0) {
+        sheet.getRange(1,1,1,data.length).setValues([data]);
+        sheet.getRange(1,1,1,data.length).setFontWeight('bold').setBackground('#E3F2FD');
+        sheet.autoResizeColumns(1, data.length);
+      }
+    } else if (act === 'append') {
+      sheet.appendRow(data);
+    }
+    return ContentService.createTextOutput('ok');
+  } catch(err) {
+    return ContentService.createTextOutput('error:'+err.message);
+  }
 }</div>
           </div>
         </div>
@@ -935,8 +964,6 @@ async function doFetch() {
     updateLastFetch();
     toast(products.length+' products loaded', 'success');
 
-    if (CFG.schedSheets && CFG.sheetsUrl) await syncToSheets();
-
     // Auto-enrich BSR if any are missing
     var needsBsr = products.filter(function(p) {
       return p.bsr === 0 && p.asin && p.asin !== 'N/A' && p.asin.length === 10;
@@ -1214,9 +1241,17 @@ async function enrichBSR() {
     }
 
     if (enriched > 0) {
-      toast('BSR fetched for ' + enriched + ' products!', 'success');
+      toast('BSR ready — syncing to Sheets...', 'success');
+      // Sync AFTER BSR is ready so sheet gets real BSR + revenue values
+      if (CFG.schedSheets && CFG.sheetsUrl) {
+        setTimeout(function(){ syncToSheets(); }, 500);
+      }
     } else {
-      toast('BSR still 0 — check Console (F12) for details.', 'error');
+      toast('BSR = 0 — check Console (F12)', 'error');
+      // Sync anyway with what we have
+      if (CFG.schedSheets && CFG.sheetsUrl) {
+        setTimeout(function(){ syncToSheets(); }, 500);
+      }
     }
 
   } catch(e) {
@@ -1379,80 +1414,76 @@ function pNum(v) { if (typeof v==='number') return v; return parseFloat(String(v
 // GOOGLE SHEETS SYNC
 // ═══════════════════════════════════════════════════
 async function syncToSheets() {
-  if (!CFG.sheetsUrl) { toast('Add Apps Script URL in Settings first', 'error'); return; }
-  if (!products.length) { toast('No data to sync', 'error'); return; }
+  if (!CFG.sheetsUrl) return;
+  if (!products.length) return;
   setSyncStatus('syncing');
 
-  // fireGet: loads URL as image — bypasses ALL CORS issues
   function fireGet(url) {
     return new Promise(function(resolve) {
       var img = new Image();
-      img.onload = img.onerror = function() { resolve(); };
+      img.onload = img.onerror = function(){ resolve(); };
       img.src = url;
       setTimeout(resolve, 3000);
     });
   }
 
-  try {
-    var pack = (CFG.packSize && CFG.packSize !== 'any') ? CFG.packSize : 'All';
-    var ts   = new Date().toLocaleString('en-IN');
-    var base = CFG.sheetsUrl;
-    var HEADER = ['Brand','Pack Size','Price (INR)','Discount %','Rating','Reviews','BSR','Est. Revenue/mo (INR)','Fetched At'];
+  async function sheetClear(name) {
+    await fireGet(CFG.sheetsUrl + '?action=clear&sheet=' + encodeURIComponent(name));
+    await sleep(300);
+  }
+  async function sheetHeader(name, hdr) {
+    await fireGet(CFG.sheetsUrl + '?action=header&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(hdr)));
+    await sleep(300);
+  }
+  async function sheetEnsureHeader(name, hdr) {
+    await fireGet(CFG.sheetsUrl + '?action=ensureHeader&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(hdr)));
+    await sleep(300);
+  }
+  async function sheetAppend(name, row) {
+    await fireGet(CFG.sheetsUrl + '?action=append&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(row)));
+    await sleep(250);
+  }
 
-    function buildRow(p) {
+  try {
+    var ts   = new Date().toLocaleString('en-IN');
+    var HDR  = ['Brand','Pack Size','Price (INR)','Discount %','Rating','Reviews','BSR','Est. Revenue/mo (INR)','Fetched At'];
+
+    function makeRow(p) {
       var ps  = detectPackSize(p.name);
       var rev = estimateRevenue(p.price, p.bsr);
-      return [p.brand, ps?ps.display:pack, p.price||0, p.disc||0, p.rating||0, p.reviews||0, p.bsr||0, rev.monthly||0, ts];
+      var packLabel = ps ? ps.display : (CFG.packSize && CFG.packSize!=='any' ? CFG.packSize : 'All');
+      return [p.brand, packLabel, p.price||0, p.disc||0, p.rating||0, p.reviews||0, p.bsr||0, rev.monthly||0, ts];
     }
 
-    // Helper: write to a specific sheet tab
-    async function writeToSheet(sheetName, rows) {
-      await fireGet(base + '?action=clear&sheet=' + encodeURIComponent(sheetName));
-      await sleep(300);
-      await fireGet(base + '?action=header&sheet=' + encodeURIComponent(sheetName) + '&data=' + encodeURIComponent(JSON.stringify(HEADER)));
-      await sleep(300);
-      for (var i = 0; i < rows.length; i++) {
-        await fireGet(base + '?action=append&sheet=' + encodeURIComponent(sheetName) + '&data=' + encodeURIComponent(JSON.stringify(rows[i])));
-        await sleep(200);
+    // ── Sheet 1: LiveData — always current, overwrite ──────────────────
+    toast('Writing LiveData...', 'success');
+    await sheetClear('LiveData');
+    await sheetHeader('LiveData', HDR);
+    for (var i=0; i<products.length; i++) {
+      await sheetAppend('LiveData', makeRow(products[i]));
+    }
+
+    // ── Sheet 2: History_500g — append 500g products only ─────────────
+    var prods500 = products.filter(function(p){
+      var ps = detectPackSize(p.name);
+      return ps && ps.grams >= 450 && ps.grams <= 550;
+    });
+    if (prods500.length > 0) {
+      await sheetEnsureHeader('History_500g', HDR);
+      for (var j=0; j<prods500.length; j++) {
+        await sheetAppend('History_500g', makeRow(prods500[j]));
       }
     }
 
-    // Helper: append to history sheet (never clears — accumulates)
-    async function appendToHistory(sheetName, rows) {
-      // Write header only if sheet is new
-      await fireGet(base + '?action=ensureHeader&sheet=' + encodeURIComponent(sheetName) + '&data=' + encodeURIComponent(JSON.stringify(HEADER)));
-      await sleep(300);
-      for (var i = 0; i < rows.length; i++) {
-        await fireGet(base + '?action=append&sheet=' + encodeURIComponent(sheetName) + '&data=' + encodeURIComponent(JSON.stringify(rows[i])));
-        await sleep(200);
-      }
-    }
-
-    var rows = products.map(buildRow);
-
-    // 1. Always write to LiveData (current snapshot)
-    toast('Syncing LiveData...', 'success');
-    await writeToSheet('LiveData', rows);
-
-    // 2. Append to size-specific history sheets
-    if (pack === '500g' || pack === 'All') {
-      var rows500 = products.filter(function(p){
-        var ps = detectPackSize(p.name);
-        return ps && Math.abs(ps.grams - 500) <= 50;
-      }).map(buildRow);
-      if (rows500.length > 0) {
-        toast('Saving 500g history...', 'success');
-        await appendToHistory('History_500g', rows500);
-      }
-    }
-    if (pack === '1kg' || pack === 'All') {
-      var rows1kg = products.filter(function(p){
-        var ps = detectPackSize(p.name);
-        return ps && Math.abs(ps.grams - 1000) <= 100;
-      }).map(buildRow);
-      if (rows1kg.length > 0) {
-        toast('Saving 1kg history...', 'success');
-        await appendToHistory('History_1kg', rows1kg);
+    // ── Sheet 3: History_1kg — append 1kg products only ───────────────
+    var prods1kg = products.filter(function(p){
+      var ps = detectPackSize(p.name);
+      return ps && ps.grams >= 900 && ps.grams <= 1100;
+    });
+    if (prods1kg.length > 0) {
+      await sheetEnsureHeader('History_1kg', HDR);
+      for (var k=0; k<prods1kg.length; k++) {
+        await sheetAppend('History_1kg', makeRow(prods1kg[k]));
       }
     }
 
@@ -1461,7 +1492,7 @@ async function syncToSheets() {
       localStorage.setItem('pp_history', JSON.stringify(history));
     }
     setSyncStatus('synced');
-    toast('Synced to Google Sheets!', 'success');
+    toast('Synced to Google Sheets (' + products.length + ' rows)!', 'success');
 
   } catch(e) {
     setSyncStatus('error');
@@ -1469,6 +1500,7 @@ async function syncToSheets() {
     console.error('[syncToSheets]', e);
   }
 }
+
 
 
 
