@@ -1,0 +1,2017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OWN Plant Protein Analyser — Amazon India Intelligence</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080c10; --bg2:#0d1117; --bg3:#141b24; --bg4:#1a2332;
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.12);
+  --green:#00e5a0; --green2:#00b87a; --green3:rgba(0,229,160,0.12);
+  --amber:#f5a623; --red:#ff4d6d; --blue:#4da6ff; --purple:#b18cfe;
+  --text:#e8edf3; --text2:#7a8a9a; --text3:#4a5a6a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,160,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,0.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+
+/* HEADER */
+.header{position:sticky;top:0;z-index:100;background:rgba(8,12,16,0.93);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:60px;gap:12px}
+.logo{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--green),var(--green2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;letter-spacing:-.5px}
+.logo-text span{color:var(--green)}
+.header-center{display:flex;align-items:center;gap:8px;flex:1;justify-content:center}
+.status-pill{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:5px 12px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text3)}
+.status-pill .dot{width:6px;height:6px;border-radius:50%;background:var(--text3)}
+.status-pill.live .dot{background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s infinite}
+.status-pill.fetching .dot{background:var(--amber);box-shadow:0 0 6px var(--amber);animation:blink 0.8s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.header-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;border:none;font-family:'Inter',sans-serif;white-space:nowrap}
+.btn-primary{background:var(--green);color:#000}
+.btn-primary:hover{background:#00ffb3;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid var(--border2)}
+.btn-ghost:hover{background:var(--bg4);color:var(--text)}
+.btn-sm{padding:5px 10px;font-size:11px}
+
+/* TABS */
+.tabs{display:flex;gap:2px;background:var(--bg3);border-bottom:1px solid var(--border);padding:0 28px;position:sticky;top:60px;z-index:99;backdrop-filter:blur(20px);background:rgba(13,17,23,0.95)}
+.tab{padding:12px 18px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;transition:all .2s;font-family:'Inter',sans-serif;white-space:nowrap}
+.tab:hover{color:var(--text2)}
+.tab.active{color:var(--green);border-bottom-color:var(--green)}
+
+/* MAIN */
+main{position:relative;z-index:1;max-width:1600px;margin:0 auto;padding:24px 28px}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* KPI GRID */
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:24px}
+.kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s;cursor:default}
+.kpi-card:hover{border-color:var(--border2);transform:translateY(-1px)}
+.kpi-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent,var(--green)),transparent);opacity:.6}
+.kpi-label{font-size:9px;font-family:'DM Mono',monospace;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);margin-bottom:8px}
+.kpi-value{font-family:'Syne',sans-serif;font-size:24px;font-weight:700;line-height:1;margin-bottom:4px}
+.kpi-sub{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace}
+.kpi-delta{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;padding:2px 5px;border-radius:3px;margin-top:3px}
+.kpi-delta.up{background:rgba(0,229,160,.1);color:var(--green)}
+.kpi-delta.down{background:rgba(255,77,109,.1);color:var(--red)}
+.green{color:var(--green)} .amber{color:var(--amber)} .red{color:var(--red)} .blue{color:var(--blue)} .purple{color:var(--purple)}
+
+/* SECTION */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.section-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px}
+.section-title .dot{width:5px;height:5px;background:var(--green);border-radius:50%;box-shadow:0 0 6px var(--green)}
+
+/* CHARTS */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:20px}
+.chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;position:relative;overflow:hidden}
+.chart-card.full{grid-column:1/-1}
+.chart-card.third{grid-column:span 1}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:20px}
+.chart-title{font-size:11px;font-family:'Syne',sans-serif;font-weight:600;color:var(--text2);letter-spacing:.3px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.badge{font-family:'DM Mono',monospace;font-size:9px;padding:2px 7px;border-radius:3px;background:var(--green3);color:var(--green);letter-spacing:.5px}
+.badge.rev{background:rgba(177,140,254,.12);color:var(--purple)}
+.badge.amber{background:rgba(245,166,35,.12);color:var(--amber)}
+.chart-wrap{position:relative}
+.h200{height:200px} .h260{height:260px} .h300{height:300px} .h320{height:320px}
+
+/* TABLE */
+.table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:20px}
+table{width:100%;border-collapse:collapse}
+thead th{padding:10px 14px;text-align:left;font-size:9px;font-family:'DM Mono',monospace;letter-spacing:1px;text-transform:uppercase;color:var(--text3);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;cursor:pointer}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.025)}
+tbody td{padding:12px 14px;font-size:11px;vertical-align:middle;white-space:nowrap}
+.rank-badge{width:24px;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:11px;font-weight:700}
+.r1{background:linear-gradient(135deg,#ffd700,#ffaa00);color:#000}
+.r2{background:linear-gradient(135deg,#c0c0c0,#a0a0a0);color:#000}
+.r3{background:linear-gradient(135deg,#cd7f32,#a05820);color:#fff}
+.rn{background:var(--bg3);color:var(--text3)}
+.brand-name{font-weight:600;font-size:12px;color:var(--text);max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.brand-sub{font-size:10px;color:var(--text3);max-width:180px;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.price-val{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--green)}
+.rev-val{font-family:'DM Mono',monospace;font-size:12px;color:var(--purple);font-weight:500}
+.stars{color:var(--amber);font-size:11px;letter-spacing:-1px}
+.rev-count{font-family:'DM Mono',monospace;font-size:11px;color:var(--text2)}
+.disc-pill{display:inline-block;padding:2px 7px;border-radius:4px;font-family:'DM Mono',monospace;font-size:10px;font-weight:500}
+.d-high{background:rgba(255,77,109,.12);color:var(--red)}
+.d-mid{background:rgba(245,166,35,.12);color:var(--amber)}
+.d-low{background:var(--bg3);color:var(--text3)}
+.bsr-val{font-family:'DM Mono',monospace;font-size:11px;color:var(--blue)}
+.stock-pill{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500}
+.s-in{background:rgba(0,229,160,.1);color:var(--green)}
+.s-out{background:rgba(255,77,109,.1);color:var(--red)}
+
+/* CONFIG */
+.config-section{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px}
+.config-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.field label{display:block;font-size:9px;font-family:'DM Mono',monospace;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:7px;padding:9px 12px;font-size:12px;color:var(--text);font-family:'DM Mono',monospace;outline:none;transition:border-color .2s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--green)}
+.field textarea{resize:vertical;min-height:80px}
+.connect-card{background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.connect-card.connected{border-color:var(--green3)}
+.connect-info .name{font-size:13px;font-weight:600}
+.connect-info .desc{font-size:11px;color:var(--text3);margin-top:2px}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:4px;font-family:'DM Mono',monospace}
+.tag.connected{background:rgba(0,229,160,.1);color:var(--green)}
+.tag.pending{background:rgba(245,166,35,.1);color:var(--amber)}
+.tag.error{background:rgba(255,77,109,.1);color:var(--red)}
+
+/* SCHEDULE */
+.schedule-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px}
+.schedule-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.schedule-row:last-child{border-bottom:none}
+.schedule-name{font-size:13px;font-weight:500}
+.schedule-desc{font-size:11px;color:var(--text3);margin-top:2px}
+.toggle{position:relative;width:36px;height:20px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--bg4);border-radius:10px;transition:.3s}
+.toggle-slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;bottom:3px;background:var(--text3);border-radius:50%;transition:.3s}
+.toggle input:checked+.toggle-slider{background:var(--green2)}
+.toggle input:checked+.toggle-slider::before{transform:translateX(16px);background:#fff}
+
+/* HISTORY TABLE */
+.hist-table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:auto;max-height:500px}
+
+/* REVENUE METER */
+.rev-meter{position:relative;display:inline-flex;align-items:center;justify-content:center;flex-direction:column}
+.confidence-bar{height:3px;border-radius:2px;background:rgba(255,255,255,0.08);margin-top:4px;overflow:hidden;width:60px}
+.confidence-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#ff4d6d,#f5a623,#00e5a0)}
+
+/* LOADING */
+#loading-overlay{position:fixed;inset:0;background:rgba(8,12,16,.97);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px}
+.loading-logo{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--green)}
+.loading-bar-wrap{width:260px;height:2px;background:var(--bg3);border-radius:1px;overflow:hidden}
+.loading-bar{height:100%;background:linear-gradient(90deg,var(--green2),var(--green));border-radius:1px;width:0%;transition:width .4s ease;box-shadow:0 0 10px var(--green)}
+.loading-status{font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);letter-spacing:.3px;min-height:16px}
+
+/* TOAST */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;font-size:12px;color:var(--text);z-index:9998;transform:translateY(80px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;gap:8px;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.success{border-color:var(--green)}
+#toast.error{border-color:var(--red)}
+
+/* SHEETS SYNC INDICATOR */
+.sync-row{display:flex;align-items:center;gap:8px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
+.sync-dot.synced{background:var(--green);box-shadow:0 0 5px var(--green)}
+.sync-dot.syncing{background:var(--amber);animation:blink .8s infinite}
+.sync-dot.error{background:var(--red)}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+.fade-in{animation:fi .4s ease both}
+@keyframes fi{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-overlay">
+  <div class="loading-logo">🌿 OWN Plant Protein Analyser</div>
+  <div class="loading-bar-wrap"><div class="loading-bar" id="lb"></div></div>
+  <div class="loading-status" id="ls">Initialising...</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">🌿</div>
+    <div class="logo-text">OWN <span style="font-size:11px;font-weight:400;color:var(--text3)">Plant Protein Analyser</span> <span style="font-size:10px;color:var(--text3);font-weight:400;font-family:'DM Mono',monospace;">v2</span></div>
+  </div>
+  <div class="header-center">
+    <div class="status-pill" id="status-pill">
+      <div class="dot"></div>
+      <span id="status-text">Initialising</span>
+    </div>
+    <div class="sync-row" id="sync-row" style="display:none">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-text">Sheets</span>
+    </div>
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)" id="next-refresh-text"></span>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-ghost btn-sm" onclick="switchTab('history')">📋 History</button>
+    <button class="btn btn-ghost btn-sm" onclick="switchTab('settings')">⚙️ Settings</button>
+    <button class="btn btn-primary btn-sm" id="fetch-btn" onclick="triggerFetch()">🔄 Refresh</button>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('dashboard')" id="tab-dashboard">📊 Dashboard</div>
+  <div class="tab" onclick="switchTab('revenue')" id="tab-revenue">💰 Revenue Intel</div>
+  <div class="tab" onclick="switchTab('history')" id="tab-history">📈 History</div>
+  <div class="tab" onclick="switchTab('settings')" id="tab-settings">⚙️ Settings</div>
+</div>
+
+<!-- MAIN -->
+<main>
+
+<!-- ═══════════════════ DASHBOARD TAB ═══════════════════ -->
+<div class="tab-panel active" id="panel-dashboard">
+
+  <!-- KPI Row -->
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="kpi-card fade-in" style="--accent:var(--green)">
+      <div class="kpi-label">Avg Price</div>
+      <div class="kpi-value green" id="k-avgprice">—</div>
+      <div class="kpi-sub">top 10 average</div>
+    </div>
+    <div class="kpi-card fade-in" style="--accent:var(--purple)">
+      <div class="kpi-label">Est. Category Rev</div>
+      <div class="kpi-value purple" id="k-catrev">—</div>
+      <div class="kpi-sub">combined top 10 / mo</div>
+    </div>
+    <div class="kpi-card fade-in" style="--accent:var(--amber)">
+      <div class="kpi-label">Avg Rating</div>
+      <div class="kpi-value amber" id="k-rating">—</div>
+      <div class="kpi-sub">out of 5.0 ★</div>
+    </div>
+    <div class="kpi-card fade-in" style="--accent:var(--blue)">
+      <div class="kpi-label">Total Reviews</div>
+      <div class="kpi-value blue" id="k-reviews">—</div>
+      <div class="kpi-sub">social proof index</div>
+    </div>
+    <div class="kpi-card fade-in" style="--accent:var(--red)">
+      <div class="kpi-label">Price Range</div>
+      <div class="kpi-value red" id="k-range">—</div>
+      <div class="kpi-sub" id="k-range-sub">min → max spread</div>
+    </div>
+    <div class="kpi-card fade-in" style="--accent:var(--green)">
+      <div class="kpi-label">Last Fetch</div>
+      <div class="kpi-value green" style="font-size:18px" id="k-fetch">—</div>
+      <div class="kpi-sub" id="k-fetch-sub">not yet fetched</div>
+    </div>
+  </div>
+
+  <!-- Charts Row 1: Price + Rating -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Price Comparison <span class="badge">INR</span></div>
+      <div class="chart-wrap h300" id="wrap-price"><canvas id="c-price"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Rating & Review Volume <span class="badge">COMBO</span></div>
+      <div class="chart-wrap h300" id="wrap-rating"><canvas id="c-rating"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2: Discount + BSR + Revenue -->
+  <div class="three-col">
+    <div class="chart-card">
+      <div class="chart-title">Discount % <span class="badge amber">%OFF</span></div>
+      <div class="chart-wrap h200" id="wrap-disc"><canvas id="c-disc"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Best Seller Rank <span class="badge">BSR</span>
+        <button onclick="enrichBSR()" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);color:#00e5a0;border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace">↻ Re-fetch BSR</button>
+        <button onclick="rebuildChartsOnly()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#7a8a9a;border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace">↻ Redraw</button>
+      </div>
+      <div class="chart-wrap h200" id="wrap-bsr"><canvas id="c-bsr"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Est. Monthly Revenue <span class="badge rev">H10 MODEL</span>
+        <button onclick="rebuildChartsOnly()" style="background:rgba(177,140,254,0.1);border:1px solid rgba(177,140,254,0.3);color:#b18cfe;border-radius:5px;padding:3px 10px;font-size:10px;cursor:pointer;font-family:'DM Mono',monospace">↻ Redraw</button>
+      </div>
+      <div class="chart-wrap h200" id="wrap-rev"><canvas id="c-rev"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Pack Size Quick Switch -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);letter-spacing:1px;text-transform:uppercase">Pack Size:</span>
+    <div style="display:flex;gap:4px" id="packsize-btns">
+      <button onclick="switchPackSize('any')"  class="ps-btn" data-size="any">All</button>
+      <button onclick="switchPackSize('500g')" class="ps-btn" data-size="500g">500g</button>
+      <button onclick="switchPackSize('1kg')"  class="ps-btn ps-active" data-size="1kg">1 kg</button>
+      <button onclick="switchPackSize('1.5kg')" class="ps-btn" data-size="1.5kg">1.5 kg</button>
+      <button onclick="switchPackSize('2kg')"  class="ps-btn" data-size="2kg">2 kg</button>
+    </div>
+    <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3)" id="packsize-status"></span>
+  </div>
+
+  <!-- Live Table -->
+  <div class="section-header">
+    <div class="section-title"><div class="dot"></div>Live Competitor Table</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)" id="tbl-count"></span>
+      <button class="btn btn-ghost btn-sm" onclick="enrichBSR()">🔍 Enrich BSR</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+      <button id="sync-btn" class="btn btn-ghost btn-sm" onclick="manualSync()" style="border-color:rgba(0,229,160,0.4);color:var(--green)">
+        📊 Sync to Sheets
+      </button>
+    </div>
+  </div>
+  <div class="table-wrap" id="table-wrap">
+    <div style="text-align:center;padding:60px;color:var(--text3);font-size:13px">
+      🌿 Click <strong style="color:var(--green)">Refresh</strong> to load Amazon India data
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════ REVENUE TAB ═══════════════════ -->
+<div class="tab-panel" id="panel-revenue">
+
+  <!-- Revenue method explainer -->
+  <div class="config-section" style="margin-bottom:20px">
+    <div class="section-title" style="margin-bottom:12px"><div class="dot"></div>Revenue Estimation Model</div>
+    <p style="font-size:12px;color:var(--text2);line-height:1.7;max-width:720px">
+      Uses the same BSR-to-sales velocity algorithm used by Helium 10's <strong style="color:var(--green)">Xray</strong> and Jungle Scout.
+      Formula: <span style="font-family:'DM Mono',monospace;color:var(--amber);font-size:11px">Daily Sales = Category Baseline × BSR^(-0.55)</span>. Products fetched using <strong style="color:var(--green)">BEST_SELLERS</strong> sort on Amazon India search, then re-sorted by BSR after enrichment.
+      Baseline calibrated at <strong style="color:var(--purple)">₹62.5L/day</strong> for BSR #1, reverse-engineered from OZiva FY2025 revenue (₹261 Cr total × ~45% Amazon × ~35% protein = ~₹34L/month at BSR #1,470). Estimates are ±40% — treat as directional, not exact.
+      Confidence degrades at BSR >5,000 (marked ⚠). Treated as estimates, not guarantees — consistent with Helium 10 accuracy disclaimers.
+    </p>
+  </div>
+
+  <!-- Revenue KPIs -->
+  <div class="kpi-grid" id="rev-kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+    <div class="kpi-card" style="--accent:var(--purple)">
+      <div class="kpi-label">Top Earner</div>
+      <div class="kpi-value purple" id="rk-top-earner">—</div>
+      <div class="kpi-sub" id="rk-top-earner-rev">est. monthly</div>
+    </div>
+    <div class="kpi-card" style="--accent:var(--green)">
+      <div class="kpi-label">Category Total</div>
+      <div class="kpi-value green" id="rk-cat-total">—</div>
+      <div class="kpi-sub">top 10 combined / mo</div>
+    </div>
+    <div class="kpi-card" style="--accent:var(--amber)">
+      <div class="kpi-label">Avg Revenue/Product</div>
+      <div class="kpi-value amber" id="rk-avg-rev">—</div>
+      <div class="kpi-sub">per month per SKU</div>
+    </div>
+    <div class="kpi-card" style="--accent:var(--blue)">
+      <div class="kpi-label">Best BSR</div>
+      <div class="kpi-value blue" id="rk-best-bsr">—</div>
+      <div class="kpi-sub" id="rk-best-bsr-brand">highest ranked</div>
+    </div>
+  </div>
+
+  <!-- Revenue Chart full width -->
+  <div class="chart-card full" style="margin-bottom:20px">
+    <div class="chart-title">Estimated Monthly Revenue by Brand <span class="badge rev">HELIUM 10 BSR MODEL</span></div>
+    <div class="chart-wrap h320" id="wrap-revfull"><canvas id="c-rev-full"></canvas></div>
+  </div>
+
+  <!-- Revenue table -->
+  <div class="section-header">
+    <div class="section-title"><div class="dot"></div>Revenue Intelligence Table</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Brand</th><th>Price</th><th>BSR</th>
+          <th>Est. Daily Sales (units)</th><th>Est. Daily Revenue</th>
+          <th>Est. Monthly Revenue</th><th>Market Share</th><th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody id="rev-table-body"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- ═══════════════════ HISTORY TAB ═══════════════════ -->
+<div class="tab-panel" id="panel-history">
+
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);letter-spacing:1px;text-transform:uppercase">Showing:</span>
+    <div style="display:flex;gap:4px">
+      <button onclick="CFG.packSize='any';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">All sizes</button>
+      <button onclick="CFG.packSize='500g';renderHistoryTab()" class="ps-btn" style="font-size:10px;padding:3px 10px">500g</button>
+      <button onclick="CFG.packSize='1kg';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">1 kg</button>
+      <button onclick="CFG.packSize='2kg';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">2 kg</button>
+    </div>
+    <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace">Only fetches matching selected size are shown</span>
+  </div>
+  <div class="charts-grid" style="margin-bottom:20px">
+    <div class="chart-card full">
+      <div class="chart-title">Price History — Top 5 Brands <span class="badge">ALL FETCHES</span></div>
+      <div class="chart-wrap h320" id="wrap-c-trend-price"><canvas id="c-trend-price"></canvas></div>
+    </div>
+  </div>
+  <div class="charts-grid" style="margin-bottom:20px">
+    <div class="chart-card">
+      <div class="chart-title">Review Growth Over Time <span class="badge">TREND</span></div>
+      <div class="chart-wrap h260" id="wrap-tr"><canvas id="c-trend-reviews"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Estimated Revenue History <span class="badge rev">H10 MODEL</span></div>
+      <div class="chart-wrap h260" id="wrap-tv"><canvas id="c-trend-rev"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-header">
+    <div class="section-title"><div class="dot"></div>All Fetch Records</div>
+    <button class="btn btn-ghost btn-sm" onclick="clearHistory()">🗑 Clear History</button>
+  </div>
+  <div class="hist-table-wrap">
+    <table>
+      <thead>
+        <tr><th>Timestamp</th><th>Pack Size</th><th>Products</th><th>Avg Price</th><th>Reviews</th><th>Est. Rev</th><th>Synced</th></tr>
+      </thead>
+      <tbody id="hist-table-body"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- ═══════════════════ SETTINGS TAB ═══════════════════ -->
+<div class="tab-panel" id="panel-settings">
+
+  <!-- Integrations -->
+  <div class="config-section">
+    <div class="section-title" style="margin-bottom:16px"><div class="dot"></div>Integrations</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+
+      <div class="connect-card" id="apify-card">
+        <div>
+          <div class="connect-info">
+            <div class="name">Apify <span style="color:var(--text3);font-size:11px">— Amazon Scraper</span></div>
+            <div class="desc">Fetches live Amazon India product data (search results)</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="tag connected">● configured</span>
+          <div class="field" style="margin:0;width:280px">
+            <input type="password" id="cfg-apify" placeholder="apify_api_...">
+          </div>
+        </div>
+      </div>
+
+      <div class="connect-card" id="rapid-card">
+        <div>
+          <div class="connect-info">
+            <div class="name">RapidAPI — Real-Time Amazon Data <span style="color:var(--text3);font-size:11px">— BSR Source</span></div>
+            <div class="desc">
+              Gets BSR, full price, discount per ASIN · Free: 500 req/month ·
+              <span style="color:var(--blue);cursor:pointer" onclick="window.open('https://rapidapi.com/letscrape-6bRBa3QguO5/api/real-time-amazon-data','_blank')">Sign up free →</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="tag connected" id="rapid-tag">● key loaded</span>
+          <div class="field" style="margin:0;width:320px">
+            <input type="password" id="cfg-rapid" placeholder="Paste RapidAPI key here...">
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="testRapidAPI()">Test</button>
+        </div>
+      </div>
+
+      <div class="connect-card" id="sheets-card">
+        <div style="flex:1">
+          <div class="connect-info">
+            <div class="name">Google Sheets <span style="color:var(--text3);font-size:11px">— Data Storage</span></div>
+            <div class="desc">Paste your Apps Script Web App URL below — <span style="color:var(--blue);cursor:pointer" onclick="document.getElementById('sheets-help').style.display=document.getElementById('sheets-help').style.display==='none'?'block':'none'">How to get it ▾</span></div>
+          </div>
+          <div id="sheets-help" style="display:none;margin-top:10px;background:var(--bg);border-radius:8px;padding:12px;font-size:11px;color:var(--text2);line-height:1.8">
+            <strong style="color:var(--green)">One-time 3-minute setup:</strong><br>
+            1. Open your Google Sheet → <strong>Extensions → Apps Script</strong><br>
+            2. Delete all code, paste the script below, click <strong>Save</strong><br>
+            3. Click <strong>Deploy → New deployment → Web app</strong><br>
+            4. Execute as: <strong>Me</strong> · Who has access: <strong>Anyone</strong> → Deploy<br>
+            5. Copy the Web App URL and paste it below<br><br>
+            <div style="background:var(--bg2);border-radius:6px;padding:10px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green);line-height:1.7;white-space:pre-wrap">function doPost(e) {
+  try {
+    var ss   = SpreadsheetApp.getActiveSpreadsheet();
+    var data = JSON.parse(e.postData.contents);
+    var sheet = ss.getSheetByName(data.sheet) || ss.insertSheet(data.sheet);
+    if (data.action === 'write') {
+      sheet.clearContents();
+      if (data.values && data.values.length > 0) {
+        sheet.getRange(1, 1, data.values.length, data.values[0].length).setValues(data.values);
+        // Bold the header row
+        sheet.getRange(1, 1, 1, data.values[0].length).setFontWeight('bold').setBackground('#E8F5E9');
+      }
+    } else if (data.action === 'append') {
+      sheet.appendRow(data.row);
+    } else if (data.action === 'ensureHeaders') {
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow(data.row);
+        sheet.getRange(1, 1, 1, data.row.length).setFontWeight('bold').setBackground('#E8F5E9');
+      }
+    }
+    return ContentService.createTextOutput('ok');
+  } catch(err) {
+    return ContentService.createTextOutput('error: ' + err.message);
+  }
+}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+          <span class="tag" id="sheets-tag">● not configured</span>
+          <div class="field" style="margin:0;width:340px">
+            <input type="text" id="cfg-sheets-url" placeholder="https://script.google.com/macros/s/.../exec" oninput="onSheetsUrlInput(this.value)" onpaste="setTimeout(()=>onSheetsUrlInput(this.value),100)">
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="testSheetsSync()">Test & Sync</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Google Sheets Setup Guide -->
+  <div class="config-section">
+    <div class="section-title" style="margin-bottom:12px"><div class="dot"></div>Google Sheets Setup (5 minutes)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          <div style="margin-bottom:8px;color:var(--text);font-weight:600;font-size:13px">Step-by-step:</div>
+          <div>1. Go to <span style="color:var(--blue);cursor:pointer" onclick="openLink('https://console.cloud.google.com')">console.cloud.google.com</span></div>
+          <div>2. Create a new project → Enable <strong style="color:var(--green)">Google Sheets API</strong></div>
+          <div>3. Credentials → Create API Key → Copy it above</div>
+          <div>4. Create a new Google Sheet</div>
+          <div>5. Share it as <strong style="color:var(--green)">"Anyone with link can edit"</strong></div>
+          <div>6. Copy the Sheet ID from the URL (the long string between /d/ and /edit)</div>
+          <div>7. Paste both above and click Save</div>
+          <div style="margin-top:12px;color:var(--text3);">The script auto-creates tabs: <span style="font-family:'DM Mono',monospace;color:var(--green)">LiveData, PriceHistory, RevenueHistory, ReviewHistory</span></div>
+        </div>
+      </div>
+      <div>
+        <div style="background:var(--bg3);border-radius:8px;padding:14px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);line-height:1.8">
+          <div style="color:var(--green);margin-bottom:8px"># Sheets structure auto-created:</div>
+          <div>📋 LiveData</div>
+          <div>  → Rank, Brand, Price, MRP, Discount%</div>
+          <div>  → Rating, Reviews, BSR, Est.Revenue</div>
+          <div>  → Seller, Stock, Timestamp</div>
+          <div style="margin-top:6px">📈 PriceHistory</div>
+          <div>  → Date | Brand1 | Brand2 | ... | Brand10</div>
+          <div style="margin-top:6px">💰 RevenueHistory</div>
+          <div>  → Date | Est.Rev1 | ... | CategoryTotal</div>
+          <div style="margin-top:6px">⭐ ReviewHistory</div>
+          <div>  → Date | Reviews1 | ... | Total</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auto-Trigger Settings -->
+  <div class="schedule-card">
+    <div class="section-title" style="margin-bottom:16px"><div class="dot"></div>Auto-Trigger Schedule</div>
+    <div class="schedule-row">
+      <div>
+        <div class="schedule-name">Hourly Refresh</div>
+        <div class="schedule-desc">Fetch new data every hour — high frequency, uses more Apify credits</div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="sched-hourly" onchange="updateSchedule()"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="schedule-row">
+      <div>
+        <div class="schedule-name">6-Hour Refresh</div>
+        <div class="schedule-desc">Balanced frequency — good for price tracking</div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="sched-6h" checked onchange="updateSchedule()"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="schedule-row">
+      <div>
+        <div class="schedule-name">Daily Refresh</div>
+        <div class="schedule-desc">Fetch once per day at the time you open the dashboard</div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="sched-daily" onchange="updateSchedule()"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="schedule-row">
+      <div>
+        <div class="schedule-name">Auto-Sync to Google Sheets</div>
+        <div class="schedule-desc">Push every fetch result to your connected Google Sheet automatically</div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="sched-sheets" checked onchange="updateSchedule()"><span class="toggle-slider"></span></label>
+    </div>
+    <div class="schedule-row">
+      <div>
+        <div class="schedule-name">Service Worker (Background Fetch)</div>
+        <div class="schedule-desc">Fetch data even when browser tab is closed — requires HTTPS / localhost</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="tag" id="sw-status-tag">● checking</span>
+        <label class="toggle"><input type="checkbox" id="sched-sw" onchange="toggleServiceWorker()"><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">
+        Next auto-fetch: <span style="color:var(--green)" id="next-fetch-display">calculating...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search Config -->
+  <div class="config-section">
+    <div class="section-title" style="margin-bottom:16px"><div class="dot"></div>Scraper Configuration</div>
+    <div class="config-grid">
+      <div class="field">
+        <label>Search Query</label>
+        <input type="text" id="cfg-query" value="plant protein powder india">
+      </div>
+      <div class="field">
+        <label>Max Products</label>
+        <input type="number" id="cfg-max" value="10" min="5" max="20">
+      </div>
+      <div class="field">
+        <label>Amazon Domain</label>
+        <select id="cfg-domain">
+          <option value="amazon.in" selected>amazon.in (India)</option>
+          <option value="amazon.com">amazon.com (USA)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Pack Size Filter</label>
+        <select id="cfg-packsize">
+          <option value="any">Any size (no filter)</option>
+          <option value="500g">500g only</option>
+          <option value="1kg" selected>1 kg only</option>
+          <option value="1.5kg">1.5 kg only</option>
+          <option value="2kg">2 kg only</option>
+          <option value="5kg">5 kg only</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+    <button class="btn btn-primary" onclick="saveAllConfig()" style="width:130px;justify-content:center">Save All</button>
+    <button class="btn btn-ghost" onclick="testSheetsSync()" style="width:160px;justify-content:center">Test Sheets Sync</button>
+  </div>
+  </div>
+
+</div>
+
+</main>
+
+<!-- SERVICE WORKER SCRIPT (inline blob) -->
+<script id="sw-script" type="text/plain">
+// PlantPulse Service Worker v2
+const CACHE = 'plantpulse-v2';
+let fetchInterval = 21600000; // 6h default
+
+self.addEventListener('install', e => { self.skipWaiting(); });
+self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
+
+self.addEventListener('message', e => {
+  if (e.data.type === 'SET_INTERVAL') fetchInterval = e.data.interval;
+  if (e.data.type === 'TRIGGER_NOW')  scheduleFetch();
+});
+
+let timer = null;
+function scheduleFetch() {
+  if (timer) clearTimeout(timer);
+  timer = setTimeout(async () => {
+    const clients = await self.clients.matchAll();
+    clients.forEach(c => c.postMessage({ type: 'FETCH_NOW' }));
+    scheduleFetch();
+  }, fetchInterval);
+}
+
+scheduleFetch();
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════
+// CONSTANTS & STATE
+// ═══════════════════════════════════════════════════
+const ACTOR = 'junglee/free-amazon-product-scraper';
+
+// Amazon India protein supplement BSR→revenue calibration
+// Based on public BSR velocity data (same model as Helium 10 Xray)
+const BSR_BASELINE_DAILY_INR = 6250000; // ₹62.5L/day — calibrated from OZiva FY2025 revenue (₹261Cr total, ~45% Amazon, ~35% protein)
+const BSR_EXPONENT = -0.55;
+const MIN_BSR_FOR_CONFIDENCE = 5000;
+
+let CFG = {};
+let products = [];
+let history  = [];
+let charts   = {};
+let schedTimer = null;
+let swReg = null;
+
+// ═══════════════════════════════════════════════════
+// REVENUE ESTIMATION (Helium 10 / Jungle Scout Model)
+// ═══════════════════════════════════════════════════
+function estimateRevenue(price, bsr) {
+  if (!bsr || bsr <= 0 || bsr >= 100000) return { daily:0, monthly:0, units:0, confidence:0 };
+  const dailyRevINR = BSR_BASELINE_DAILY_INR * Math.pow(bsr, BSR_EXPONENT);
+  const dailyUnits  = price > 0 ? Math.round(dailyRevINR / price) : 0;
+  const monthlyRev  = Math.round(dailyRevINR * 30);
+  const confidence  = bsr < 500 ? 85 : bsr < 2000 ? 70 : bsr < 5000 ? 55 : bsr < 20000 ? 35 : 15;
+  return { daily: Math.round(dailyRevINR), monthly: monthlyRev, units: dailyUnits, confidence };
+}
+
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+window.addEventListener('load', async () => {
+  try {
+    loadConfig();
+    loadHistory();
+    populateSettingsUI();
+    setLoad(20, 'Loading saved data...');
+    await sleep(300);
+
+    checkServiceWorkerStatus();
+    updateScheduleDisplay();
+
+    const saved = getSaved();
+    if (saved && saved.length > 0) {
+      products = saved;
+      setLoad(80, 'Rendering...');
+      await sleep(200);
+      try { renderAll(); } catch(e) { console.error('renderAll error:', e); }
+      setLoad(100, 'Ready');
+      await sleep(300);
+    } else {
+      setLoad(60, 'Fetching from Amazon India...');
+      try { await doFetch(); } catch(e) { console.error('doFetch error:', e); }
+    }
+  } catch(e) {
+    console.error('Init error:', e);
+  } finally {
+    hideLoading(); // ALWAYS hide loading screen
+    try { startSchedule(); } catch(e) {}
+    try { renderHistoryTab(); } catch(e) {}
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', function(e) {
+        if (e.data && e.data.type === 'FETCH_NOW') doFetch();
+      });
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════
+const DEFAULTS = {
+  apiKey:'apify_api_sXiL5OFbxynFHq2ZhoxET9iLRqckqP2v1Vcy',
+  rapidKey:'dccc09f657msh02554c96cf4afa8p116988jsnf22cc338dab7',   // RapidAPI key
+  query:'plant protein powder india', maxItems:10, domain:'amazon.in',
+  interval:21600, sheetsUrl:'',  // Google Apps Script Web App URL
+  schedHourly:false, sched6h:true, schedDaily:false, schedSheets:true
+};
+
+function loadConfig() {
+  try { CFG = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('pp_cfg')||'{}') }; }
+  catch(e) { CFG = {...DEFAULTS}; }
+}
+
+function saveAllConfig() {
+  CFG.apiKey   = val('cfg-apify')   || CFG.apiKey;
+  CFG.rapidKey  = val('cfg-rapid')  || CFG.rapidKey;
+  CFG.packSize  = val('cfg-packsize') || CFG.packSize;
+  CFG.query    = val('cfg-query')   || CFG.query;
+  CFG.maxItems = parseInt(val('cfg-max')) || 10;
+  CFG.domain   = val('cfg-domain');
+  CFG.sheetsUrl = val('cfg-sheets-url') || CFG.sheetsUrl || '';
+  localStorage.setItem('pp_cfg', JSON.stringify(CFG));
+  startSchedule();
+  toast('✅ Settings saved', 'success');
+  checkSheetsConnection();
+}
+
+function populateSettingsUI() {
+  setVal('cfg-apify',     CFG.apiKey);
+  setVal('cfg-rapid',     CFG.rapidKey);
+  setVal('cfg-packsize', CFG.packSize);
+  setVal('cfg-query',     CFG.query);
+  setVal('cfg-max',       CFG.maxItems);
+  setVal('cfg-domain',    CFG.domain);
+  setVal('cfg-sheets-url', CFG.sheetsUrl || '');
+  if (CFG.sheetsUrl) { setTimeout(function(){ onSheetsUrlInput(CFG.sheetsUrl); }, 200); }
+  chk('sched-hourly', CFG.schedHourly);
+  chk('sched-6h',     CFG.sched6h);
+  chk('sched-daily',  CFG.schedDaily);
+  chk('sched-sheets', CFG.schedSheets);
+  checkSheetsConnection();
+}
+
+// ═══════════════════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════════════════
+function saveProd(data) {
+  localStorage.setItem('pp_products', JSON.stringify(data));
+  localStorage.setItem('pp_last', new Date().toISOString());
+}
+function getSaved() {
+  try { return JSON.parse(localStorage.getItem('pp_products')||'null'); } catch(e){return null;}
+}
+function loadHistory() {
+  try { history = JSON.parse(localStorage.getItem('pp_history')||'[]'); } catch(e){history=[];}
+}
+function appendHistory(data) {
+  const rev = data.map(p=>estimateRevenue(p.price,p.bsr).monthly);
+  const snap = {
+    ts: new Date().toISOString(),
+    packSize: CFG.packSize || 'any',
+    items: data.map((p,i) => ({
+      brand:p.brand, price:p.price, rating:p.rating,
+      reviews:p.reviews, bsr:p.bsr, rev:rev[i]
+    })),
+    synced: false
+  };
+  history.push(snap);
+  if (history.length > 180) history = history.slice(-180);
+  localStorage.setItem('pp_history', JSON.stringify(history));
+}
+function clearHistory() {
+  if (!confirm('Clear all fetch history?')) return;
+  history = [];
+  localStorage.removeItem('pp_history');
+  renderHistoryTab();
+  toast('History cleared', 'success');
+}
+
+// ═══════════════════════════════════════════════════
+// FETCH
+// ═══════════════════════════════════════════════════
+async function triggerFetch() {
+  const btn = document.getElementById('fetch-btn');
+  btn.disabled = true; btn.textContent = '⏳ Fetching...';
+  setStatus('fetching', 'Fetching...');
+  await doFetch();
+  btn.disabled = false; btn.textContent = '🔄 Refresh';
+}
+
+async function doFetch() {
+  try {
+    // ── RapidAPI search → products WITH ASINs in one call ─────────────────
+    setStatus('fetching', 'Fetching from RapidAPI...');
+    var rapidProducts = [];
+
+    if (CFG.rapidKey) {
+      try {
+        rapidProducts = await fetchFromRapidSearch(buildSearchQuery());
+        console.log('[doFetch] RapidAPI returned', rapidProducts.length, 'products');
+        rapidProducts.forEach(function(p,i) {
+          console.log('  '+(i+1)+'. '+p.brand+' | asin='+p.asin+' | price='+p.price+' | bsr='+p.bsr);
+        });
+      } catch(e) {
+        console.warn('[doFetch] RapidAPI search failed:', e.message);
+        toast('RapidAPI failed: ' + e.message, 'error');
+      }
+    }
+
+    // ── Apify fallback if RapidAPI gave nothing ────────────────────────────
+    if (rapidProducts.length === 0) {
+      setStatus('fetching', 'Trying Apify fallback...');
+      try {
+        var items = await runApifyActor(
+          'junglee/free-amazon-product-scraper',
+          { categoryUrls:[{ url:'https://www.'+CFG.domain+'/s?k='+encodeURIComponent(buildSearchQuery()) }],
+            maxItems: CFG.maxItems, proxyConfiguration:{ useApifyProxy:true } },
+          function(t) { setStatus('fetching', 'Apify scraping... '+t+'s'); }
+        );
+        rapidProducts = parseItems(items || []);
+      } catch(e) {
+        console.warn('[doFetch] Apify also failed:', e.message);
+      }
+    }
+
+    if (rapidProducts.length === 0) throw new Error('No products from any source. Check API keys in Settings.');
+
+    // Sort by BSR ascending if available (lowest BSR = best selling = rank 1)
+    // Fall back to the order returned by API if BSR not yet available
+    var sorted = rapidProducts.slice(0, CFG.maxItems);
+    var hasBsrData = sorted.some(function(p){ return p.bsr > 0; });
+    if (hasBsrData) {
+      sorted.sort(function(a, b) {
+        if (a.bsr > 0 && b.bsr > 0) return a.bsr - b.bsr; // both have BSR — sort ascending
+        if (a.bsr > 0) return -1; // a has BSR, b doesn't — a goes first
+        if (b.bsr > 0) return 1;  // b has BSR, a doesn't — b goes first
+        return 0;
+      });
+    }
+    products = sorted.map(function(p,i) {
+      return Object.assign({}, p, { rank: i+1 });
+    });
+
+    saveProd(products);
+    appendHistory(products);
+    renderAll();
+    renderHistoryTab();
+
+    var withBsr = products.filter(function(p){return p.bsr>0;}).length;
+    setStatus('live', 'Live · '+products.length+' products · '+withBsr+' BSR');
+    updateLastFetch();
+    toast(products.length+' products loaded', 'success');
+
+    if (CFG.schedSheets && CFG.sheetsUrl) await syncToSheets();
+
+    // Auto-enrich BSR if any are missing
+    var needsBsr = products.filter(function(p) {
+      return p.bsr === 0 && p.asin && p.asin !== 'N/A' && p.asin.length === 10;
+    });
+    if (needsBsr.length > 0 && CFG.rapidKey) {
+      console.log('[doFetch] Auto-triggering enrichBSR for', needsBsr.length, 'products');
+      toast('Auto-fetching BSR for '+needsBsr.length+' products...', 'success');
+      setTimeout(enrichBSR, 800);
+    }
+
+  } catch(e) {
+    setStatus('live', 'Error — check console');
+    toast('Error: ' + e.message, 'error');
+    console.error('[doFetch]', e);
+  } finally {
+    // Always ensure loading overlay is hidden
+    hideLoading();
+  }
+}
+
+
+// ── RapidAPI /search — returns products WITH BSR in one call ──────────────────
+// Much more reliable than extracting ASINs from Apify then doing per-ASIN lookups
+async function fetchFromRapidSearch(query) {
+  const url = `https://real-time-amazon-data.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=1&country=IN&sort_by=RELEVANCE&product_condition=ALL&is_prime=false&num=20`;
+  console.log('[RapidAPI] Searching:', url);
+
+  const resp = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-RapidAPI-Key':  CFG.rapidKey,
+      'X-RapidAPI-Host': 'real-time-amazon-data.p.rapidapi.com'
+    }
+  });
+
+  const json = await resp.json();
+  console.log('[RapidAPI] Response status:', resp.status, '| top keys:', Object.keys(json).join(','));
+
+  if (!resp.ok) throw new Error(`RapidAPI ${resp.status}: ${json.message || JSON.stringify(json)}`);
+
+  // API returns json.data.products array
+  const items = json.data?.products || json.products || json.results || json.data || [];
+  if (!Array.isArray(items) || items.length === 0) {
+    console.warn('[RapidAPI] No products array found. Full response:', JSON.stringify(json).substring(0, 500));
+    throw new Error('RapidAPI returned no products array');
+  }
+
+  console.log('[RapidAPI] Raw items count:', items.length);
+
+  // Filter by pack size
+  var filtered = items;
+  if (CFG.packSize && CFG.packSize !== 'any') {
+    var before = items.length;
+    filtered = items.filter(function(item) {
+      var nm = String(item.product_title || item.title || item.name || '');
+      return packSizeMatchesFilter({name: nm}, CFG.packSize);
+    });
+    console.log('[packSize] ' + CFG.packSize + ': ' + before + ' -> ' + filtered.length + ' matched');
+    if (filtered.length === 0) { filtered = items; toast('No ' + CFG.packSize + ' products found', 'error'); }
+  }
+  return filtered.slice(0, CFG.maxItems).map((item, i) => {
+    console.log(`[RapidAPI item ${i}] keys:`, Object.keys(item).join(','));
+
+    // ASIN
+    const asin = item.asin || item.product_asin || item.id || 'N/A';
+
+    // Name / brand
+    const rawName = item.product_title || item.title || item.name || 'Unknown';
+    const name  = decodeHtml(rawName);
+    const brand = decodeHtml(item.product_brand || item.brand || name.split(' ')[0] || 'Brand');
+
+    // Price — RapidAPI returns strings like "₹2,499" or "2499.00"
+    const priceStr = item.product_price || item.price || item.current_price || '';
+    const mrpStr   = item.product_original_price || item.original_price || item.list_price || '';
+    const price    = pNum(priceStr);
+    const mrp      = pNum(mrpStr);
+
+    // Discount
+    const discStr  = item.product_discount || item.discount || item.savings_percentage || '';
+    const disc     = discStr
+      ? parseInt(String(discStr).replace(/[^0-9]/g, '')) || 0
+      : (mrp > 0 && mrp > price ? Math.round((mrp - price) / mrp * 100) : 0);
+
+    // Rating
+    const rating = parseFloat(item.product_star_rating || item.stars || item.rating || 0) || 0;
+
+    // Reviews
+    const reviews = parseInt(
+      String(item.product_num_ratings || item.ratings_total || item.num_ratings || item.review_count || 0)
+        .replace(/[^0-9]/g, '')
+    ) || 0;
+
+    // BSR — this is the key field from the search endpoint
+    let bsr = 0;
+    if (item.product_rank)          bsr = parseInt(String(item.product_rank).replace(/\D/g,'')) || 0;
+    if (!bsr && item.best_seller_rank) bsr = parseInt(String(item.best_seller_rank).replace(/\D/g,'')) || 0;
+    if (!bsr && item.bestsellers_rank) {
+      const bsrArr = Array.isArray(item.bestsellers_rank) ? item.bestsellers_rank : [item.bestsellers_rank];
+      bsr = parseInt(String(bsrArr[0]?.rank || bsrArr[0] || '').replace(/\D/g,'')) || 0;
+    }
+    if (!bsr && item.sales_rank)    bsr = parseInt(String(item.sales_rank).replace(/\D/g,'')) || 0;
+
+    // If BSR still 0, fetch individually (costs 1 extra RapidAPI call per product)
+    // We'll do this async after the search results are shown
+
+    // Stock
+    const inStock = item.is_prime !== undefined ? true
+      : String(item.product_availability || item.availability || 'in stock').toLowerCase().includes('stock');
+
+    // URL
+    const url2 = item.product_url || item.url || `https://www.${CFG.domain}/dp/${asin}`;
+
+    console.log(`[Parsed ${i+1}] ${brand} | ₹${price} | BSR:${bsr} | ★${rating} | ${reviews} rev`);
+
+    return { rank: i+1, brand: brand.substring(0,20), name: name.substring(0,80),
+             asin, price, mrp, disc, rating, reviews, bsr, inStock,
+             seller: item.product_seller || item.seller || 'Amazon', url: url2 };
+  });
+}
+
+// ── Per-ASIN BSR enrichment (called after initial render if BSR=0) ─────────────
+async function enrichBSR() {
+  var needsBsr = products.filter(function(p) { return p.bsr === 0; });
+  if (needsBsr.length === 0) { toast('All products already have BSR', 'success'); return; }
+  if (!CFG.apiKey) { toast('Apify key needed for BSR fetch', 'error'); return; }
+
+  // Build product page URLs — Apify actor needs categoryUrls
+  var productUrls = needsBsr
+    .filter(function(p) { return p.asin && p.asin !== 'N/A' && p.asin.length === 10; })
+    .map(function(p) { return { url: 'https://www.amazon.in/dp/' + p.asin }; });
+
+  // Also try URLs from the product data if ASIN looks wrong
+  needsBsr.forEach(function(p) {
+    var hasUrl = productUrls.some(function(u) { return u.url.includes(p.asin); });
+    if (!hasUrl && p.url && p.url.includes('amazon.in')) {
+      productUrls.push({ url: p.url });
+    }
+  });
+
+  if (productUrls.length === 0) {
+    toast('No valid ASINs or URLs to fetch BSR from', 'error');
+    console.warn('[enrichBSR] ASINs:', needsBsr.map(function(p){return p.asin;}).join(','));
+    return;
+  }
+
+  console.log('[enrichBSR] Fetching BSR for', productUrls.length, 'product pages via Apify');
+  console.log('[enrichBSR] URLs:', productUrls.map(function(u){return u.url;}).join('\n'));
+  toast('Fetching BSR from Amazon product pages...', 'success');
+  setStatus('fetching', 'Fetching BSR via Apify...');
+
+  try {
+    // Use startUrls (not categoryUrls) for product detail pages
+    var items = await runApifyActor(
+      'junglee/free-amazon-product-scraper',
+      {
+        categoryUrls: productUrls,
+        maxItems: productUrls.length + 2,
+        proxyConfiguration: { useApifyProxy: true }
+      },
+      function(t) { setStatus('fetching', 'Fetching BSR from product pages... ' + t + 's'); }
+    );
+
+    console.log('[enrichBSR] Apify returned', items ? items.length : 0, 'items');
+    if (items) {
+      items.forEach(function(item, i) {
+        console.log('[enrichBSR item ' + i + ']', JSON.stringify(item).substring(0, 300));
+      });
+    }
+
+    if (!items || items.length === 0) {
+      toast('Apify returned no data for product pages', 'error');
+      return;
+    }
+
+    var enriched = 0;
+    items.forEach(function(item) {
+      // Match to our product by ASIN or name
+      var itemAsin = item.asin || item.productAsin || '';
+      var itemName = (item.name || item.title || '').toLowerCase();
+
+      var idx = products.findIndex(function(p) {
+        if (itemAsin && p.asin === itemAsin) return true;
+        if (itemAsin && p.url && p.url.includes(itemAsin)) return true;
+        // Match by name similarity
+        var pName = p.name.toLowerCase();
+        return pName.length > 5 && itemName.length > 5 &&
+               pName.substring(0,15) === itemName.substring(0,15);
+      });
+
+      if (idx < 0) { console.log('[enrichBSR] No match for:', itemAsin, itemName.substring(0,40)); return; }
+
+      // Extract BSR from product page data
+      var bsr = 0;
+      var allStr = JSON.stringify(item);
+
+      // Try all known field names
+      var bsrVal = item.bestSellersRank || item.bestsellersRank || item.salesRank ||
+                   item.bsrRank || item.best_sellers_rank || item.salesrank || 0;
+      if (bsrVal) bsr = parseInt(String(bsrVal).replace(/[^0-9]/g,'')) || 0;
+
+      // Try array format
+      if (!bsr && Array.isArray(item.bestSellersRank)) {
+        bsr = parseInt(String(item.bestSellersRank[0]&&item.bestSellersRank[0].rank||0).replace(/[^0-9]/g,''))||0;
+      }
+
+      // Scan raw JSON for BSR pattern — Amazon product pages always have "#X in Category"
+      if (!bsr) {
+        var m = allStr.match(/#([\d,]+)\s+in\s+[A-Za-z]/);
+        if (m) bsr = parseInt(m[1].replace(/,/g,'')) || 0;
+      }
+      if (!bsr) {
+        var m2 = allStr.match(/"rank"\s*:\s*"?(\d{1,8})"?/);
+        if (m2) bsr = parseInt(m2[1]) || 0;
+      }
+
+      console.log('[enrichBSR] Matched idx=' + idx + ' BSR=' + bsr + ' for ' + products[idx].brand);
+
+      products[idx].bsr = bsr;
+      if (itemAsin) products[idx].asin = itemAsin;
+
+      var price   = pNum(item.price || item.currentPrice || 0);
+      var rating  = parseFloat(item.stars || item.rating || 0) || 0;
+      var reviews = parseInt(String(item.reviewsCount || item.ratingsTotal || 0).replace(/[^0-9]/g,'')) || 0;
+      var disc    = pNum(item.discount || 0);
+
+      if (price > 0)   products[idx].price   = price;
+      if (rating > 0)  products[idx].rating  = rating;
+      if (reviews > 0) products[idx].reviews = reviews;
+      if (disc > 0)    products[idx].disc    = disc;
+      if (bsr > 0)     enriched++;
+    });
+
+    // Re-sort by BSR now that we have enriched data
+    var hasBsr = products.some(function(p){ return p.bsr > 0; });
+    if (hasBsr) {
+      products.sort(function(a,b){
+        if (a.bsr>0&&b.bsr>0) return a.bsr-b.bsr;
+        if (a.bsr>0) return -1;
+        if (b.bsr>0) return 1;
+        return 0;
+      });
+      products = products.map(function(p,i){ return Object.assign({},p,{rank:i+1}); });
+    }
+
+    saveProd(products);
+    renderAll();
+    appendHistory(products);
+
+    var withBsr = products.filter(function(p){return p.bsr>0;}).length;
+    setStatus('live', 'Live · '+products.length+' products · '+withBsr+' BSR');
+
+    if (enriched > 0) {
+      toast('BSR fetched for ' + enriched + ' products! Table re-sorted by BSR rank.', 'success');
+    } else {
+      toast('BSR still 0 — check Console (F12) for details.', 'error');
+    }
+
+  } catch(e) {
+    console.error('[enrichBSR] Apify error:', e);
+    toast('BSR fetch error: ' + e.message, 'error');
+    setStatus('live', 'Live · ' + products.length + ' products');
+  }
+}
+
+
+
+
+function switchPackSize(size) {
+  CFG.packSize = size;
+  localStorage.setItem('pp_cfg', JSON.stringify(CFG));
+  document.querySelectorAll('.ps-btn').forEach(function(btn) {
+    btn.classList.toggle('ps-active', btn.getAttribute('data-size') === size);
+  });
+  set('packsize-status', 'Fetching ' + (size === 'any' ? 'all sizes' : size) + '...');
+  var dd = document.getElementById('cfg-packsize');
+  if (dd) dd.value = size;
+  triggerFetch();
+}
+
+// Build search query with pack size appended for better Amazon filtering
+function buildSearchQuery() {
+  var base = CFG.query || 'plant protein powder india';
+  if (!CFG.packSize || CFG.packSize === 'any') return base;
+  // Append size to query — Amazon returns size-specific results
+  return base + ' ' + CFG.packSize;
+}
+
+async function testSheetsSync() {
+  if (!CFG.sheetsUrl) {
+    toast('Paste your Apps Script Web App URL first', 'error'); return;
+  }
+  toast('Testing Sheets connection...', 'success');
+  await checkSheetsConnection();
+  if (products.length > 0) {
+    toast('Writing test data to sheet...', 'success');
+    await syncToSheets();
+  } else {
+    toast('Load product data first, then test sync', 'error');
+  }
+}
+
+// Re-render everything using already-loaded data — no API call
+function rebuildChartsOnly() {
+  if (!products || products.length === 0) {
+    toast('No data loaded yet — click Refresh first', 'error');
+    return;
+  }
+  renderAll();
+  toast('Charts redrawn with latest BSR data', 'success');
+}
+
+// Auto-save and validate Sheets URL as user types/pastes
+function onSheetsUrlInput(val) {
+  val = val.trim();
+  if (!val) return;
+  CFG.sheetsUrl = val;
+  localStorage.setItem('pp_cfg', JSON.stringify(CFG));
+  // Show connected immediately if URL looks valid
+  if (val.includes('script.google.com/macros/s/') && val.includes('/exec')) {
+    setTag('sheets-tag','connected','● URL saved');
+    document.getElementById('sheets-card').classList.add('connected');
+    document.getElementById('sync-row').style.display='flex';
+  } else {
+    setTag('sheets-tag','pending','● invalid URL format');
+  }
+}
+
+async function manualSync() {
+  if (!CFG.sheetsUrl) {
+    toast('Paste your Apps Script URL in Settings first', 'error');
+    switchTab('settings');
+    return;
+  }
+  if (!products.length) {
+    toast('No data to sync — click Refresh first', 'error');
+    return;
+  }
+  var btn = document.getElementById('sync-btn');
+  if (btn) btn.textContent = '⏳ Syncing...';
+  await syncToSheets();
+  if (btn) btn.textContent = '📊 Sync to Sheets';
+  // Verify by logging what was sent
+  console.log('[manualSync] Done. Check your Google Sheet for data.');
+  console.log('[manualSync] Sheet URL check: open', CFG.sheetsUrl.replace('/exec',''), 'to verify deployment');
+}
+
+function Logger() {}
+Logger.log = function(msg) { console.log('[PlantPulse]', msg); };
+
+
+// Generic Apify actor runner with polling
+async function runApifyActor(actor, payload, onProgress) {
+  const url = `https://api.apify.com/v2/acts/${encodeURIComponent(actor)}/runs`;
+  const r1 = await fetch(url, {
+    method:'POST',
+    headers:{ 'Authorization':'Bearer '+CFG.apiKey, 'Content-Type':'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const j1 = await r1.json();
+  if (!j1.data?.id) throw new Error('Run failed: '+JSON.stringify(j1.error||j1));
+  const runId = j1.data.id;
+
+  let status='RUNNING', waited=0;
+  while ((status==='RUNNING'||status==='READY') && waited<200000) {
+    await sleep(6000); waited+=6000;
+    if (onProgress) onProgress(Math.round(waited/1000));
+    const rs = await fetch(`https://api.apify.com/v2/actor-runs/${runId}`, {
+      headers:{ 'Authorization':'Bearer '+CFG.apiKey }
+    });
+    status = (await rs.json()).data?.status;
+  }
+  if (status!=='SUCCEEDED') throw new Error(`Actor ended with status: ${status}`);
+
+  const rd = await fetch(
+    `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?limit=20`,
+    { headers:{ 'Authorization':'Bearer '+CFG.apiKey } }
+  );
+  return await rd.json();
+}
+
+function parseItems(items) {
+  return items.slice(0, 10).map((item, i) => {
+    const nm = decodeHtml((item.name||item.title||'Unknown').replace(/\[|\]/g,''));
+    const brand = nm.split(/[\s·|]+/)[0].substring(0,20) || 'Brand';
+    // Try every known field name the actor uses
+    const price   = pNum(item.price?.value||item.price||item.currentPrice||item.discountedPrice||item.salePrice||0);
+    const mrp     = pNum(item.originalPrice?.value||item.originalPrice||item.mrp||item.listPrice||item.wasPrice||item.strikethroughPrice||0);
+    // Discount: from explicit field, or calculate from price vs mrp, or from discountPercentage
+    const discRaw = pNum(item.discountPercentage||item.discount||item.savingsPercentage||0);
+    const disc    = discRaw > 0 ? discRaw : (mrp > 0 && mrp > price) ? Math.round((mrp-price)/mrp*100) : 0;
+    const rating  = parseFloat(item.stars||item.rating?.value||item.rating||0)||0;
+    const reviews = parseInt(String(item.reviewsCount||item.ratingsTotal||item.numberOfReviews||0).replace(/\D/g,''))||0;
+    const bsr     = parseInt(String(item.bestSellersRank?.[0]?.rank||item.bestsellersRank||item.salesRank||0).replace(/\D/g,''))||0;
+    const inStock = String(item.availability||'').toLowerCase().includes('stock')||item.inStock===true;
+    return { rank:i+1, brand, name:(item.name||'').substring(0,80), asin:item.asin||'N/A', price, mrp, disc, rating, reviews, bsr, seller:item.seller||item.sellerName||'Amazon', inStock, url:item.url||item.productUrl||`https://www.${CFG.domain}/s?k=${encodeURIComponent(CFG.query)}` };
+  });
+}
+function pNum(v) { if (typeof v==='number') return v; return parseFloat(String(v).replace(/[^0-9.]/g,''))||0; }
+
+// ═══════════════════════════════════════════════════
+// GOOGLE SHEETS SYNC
+// ═══════════════════════════════════════════════════
+async function syncToSheets() {
+  if (!CFG.sheetsUrl) return;
+  setSyncStatus('syncing');
+  try {
+    var pack = (CFG.packSize && CFG.packSize !== 'any') ? CFG.packSize : 'All';
+    var ts   = new Date().toLocaleString('en-IN');
+
+    // Single clean table — one row per product
+    var rows = [[
+      'Brand', 'Pack Size', 'Price (INR)', 'Discount %',
+      'Rating', 'Reviews', 'BSR', 'Est. Revenue/mo (INR)', 'Fetched At'
+    ]];
+
+    products.forEach(function(p) {
+      var ps  = detectPackSize(p.name);
+      var rev = estimateRevenue(p.price, p.bsr);
+      rows.push([
+        p.brand,
+        ps ? ps.display : pack,
+        p.price   || '',
+        p.disc    || 0,
+        p.rating  || '',
+        p.reviews || 0,
+        p.bsr     || '',
+        rev.monthly || '',
+        ts
+      ]);
+    });
+
+    console.log('[Sheets] Sending to:', CFG.sheetsUrl);
+    console.log('[Sheets] Rows:', rows.length, '| First row:', JSON.stringify(rows[0]));
+    console.log('[Sheets] Sample data row:', JSON.stringify(rows[1]));
+
+    // Send with no-cors to avoid CORS preflight block from file://
+    // Apps Script Web Apps accept this — response will be opaque (we can't read it)
+    // but data WILL arrive at the sheet
+    await fetch(CFG.sheetsUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'write', sheet: 'LiveData', values: rows })
+    });
+    console.log('[Sheets] Request sent (no-cors — check your sheet for data)');
+
+    if (history.length) history[history.length-1].synced = true;
+    localStorage.setItem('pp_history', JSON.stringify(history));
+    setSyncStatus('synced');
+    toast('Synced to Google Sheets', 'success');
+  } catch(e) {
+    setSyncStatus('error');
+    toast('Sheets sync failed: ' + e.message, 'error');
+    console.error('[syncToSheets]', e);
+  }
+}
+
+
+// Post to Google Apps Script Web App
+
+
+// Write headers only if sheet is empty
+
+
+
+
+
+
+
+async function checkSheetsConnection() {
+  if (!CFG.sheetsUrl) {
+    setTag('sheets-tag','pending','● not configured');
+    document.getElementById('sync-row').style.display='none';
+    return;
+  }
+  // Apps Script URL - test with a simple GET (will return HTML but confirms URL is valid)
+  setTag('sheets-tag','pending','● testing...');
+  try {
+    var resp = await fetch(CFG.sheetsUrl, { method:'GET', mode:'no-cors' });
+    // no-cors means we can't read the response but if it doesn't throw, URL is reachable
+    setTag('sheets-tag','connected','● connected');
+    document.getElementById('sheets-card').classList.add('connected');
+    document.getElementById('sync-row').style.display='flex';
+  } catch(e) {
+    setTag('sheets-tag','error','● URL unreachable');
+    console.error('[Sheets]', e);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// SERVICE WORKER
+// ═══════════════════════════════════════════════════
+async function checkServiceWorkerStatus() {
+  if (!('serviceWorker' in navigator)) {
+    setTag('sw-status-tag','error','● not supported');
+    return;
+  }
+  const reg = await navigator.serviceWorker.getRegistration('/');
+  if (reg) {
+    swReg = reg;
+    setTag('sw-status-tag','connected','● active');
+    chk('sched-sw', true);
+    sendSWInterval();
+  } else {
+    setTag('sw-status-tag','pending','● inactive');
+  }
+}
+
+async function toggleServiceWorker() {
+  const on = document.getElementById('sched-sw').checked;
+  if (on) {
+    try {
+      const swBlob = new Blob([document.getElementById('sw-script').textContent], {type:'text/javascript'});
+      const swUrl  = URL.createObjectURL(swBlob);
+      swReg = await navigator.serviceWorker.register(swUrl, {scope:'/'});
+      setTag('sw-status-tag','connected','● active');
+      sendSWInterval();
+      toast('✅ Service worker active — background fetching enabled', 'success');
+    } catch(e) {
+      setTag('sw-status-tag','error','● failed (needs HTTPS)');
+      toast('⚠ Service worker needs HTTPS or localhost', 'error');
+      chk('sched-sw', false);
+    }
+  } else {
+    if (swReg) { await swReg.unregister(); swReg=null; }
+    setTag('sw-status-tag','pending','● inactive');
+  }
+}
+
+function sendSWInterval() {
+  if (!swReg?.active) return;
+  swReg.active.postMessage({ type:'SET_INTERVAL', interval:getInterval()*1000 });
+}
+
+// ═══════════════════════════════════════════════════
+// SCHEDULING
+// ═══════════════════════════════════════════════════
+function updateSchedule() {
+  CFG.schedHourly = chkVal('sched-hourly');
+  CFG.sched6h     = chkVal('sched-6h');
+  CFG.schedDaily  = chkVal('sched-daily');
+  CFG.schedSheets = chkVal('sched-sheets');
+  localStorage.setItem('pp_cfg', JSON.stringify(CFG));
+  startSchedule();
+}
+
+function getInterval() {
+  if (CFG.schedHourly) return 3600;
+  if (CFG.sched6h)     return 21600;
+  if (CFG.schedDaily)  return 86400;
+  return 0;
+}
+
+function startSchedule() {
+  if (schedTimer) clearInterval(schedTimer);
+  const secs = getInterval();
+  if (!secs) { set('next-refresh-text',''); return; }
+
+  let countdown = secs;
+  const lastFetch = localStorage.getItem('pp_last');
+  if (lastFetch) {
+    const elapsed = (Date.now() - new Date(lastFetch).getTime()) / 1000;
+    countdown = Math.max(1, Math.round(secs - elapsed));
+    if (countdown <= 1) setTimeout(doFetch, 2000);
+  }
+
+  schedTimer = setInterval(() => {
+    countdown--;
+    updateScheduleDisplay(countdown);
+    if (countdown <= 0) {
+      countdown = secs;
+      doFetch();
+    }
+  }, 1000);
+
+  updateScheduleDisplay(countdown);
+  sendSWInterval();
+}
+
+function updateScheduleDisplay(secs) {
+  if (!secs || secs <= 0) { set('next-refresh-text',''); set('next-fetch-display','inactive'); return; }
+  const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
+  const str = h>0 ? `${h}h ${m}m` : m>0 ? `${m}m ${s}s` : `${s}s`;
+  set('next-refresh-text',`Next: ${str}`);
+  set('next-fetch-display', str);
+}
+
+// ═══════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════
+function renderAll() {
+  renderKPIs();
+  renderTable();
+  renderCharts();
+  renderRevenueTab();
+}
+
+function renderKPIs() {
+  if (!products.length) return;
+  const prices  = products.map(p=>p.price).filter(p=>p>0);
+  const ratings = products.map(p=>p.rating).filter(r=>r>0);
+  const revs    = products.map(p=>p.reviews);
+  const avgP    = prices.length ? Math.round(prices.reduce((a,b)=>a+b,0)/prices.length) : 0;
+  const catRev  = products.reduce((s,p)=>s+estimateRevenue(p.price,p.bsr).monthly,0);
+  const avgR    = ratings.length ? (ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1) : 0;
+  const totRev  = revs.reduce((a,b)=>a+b,0);
+  const minP    = prices.length ? Math.min(...prices) : 0;
+  const maxP    = prices.length ? Math.max(...prices) : 0;
+
+  set('k-avgprice', `₹${fmt(avgP)}`);
+  set('k-catrev',   `₹${fmtL(catRev)}`);
+  set('k-rating',   `${avgR}★`);
+  set('k-reviews',  fmt(totRev));
+  set('k-range',    `₹${fmt(minP)}`);
+  set('k-range-sub',`to ₹${fmt(maxP)}`);
+  const lf = localStorage.getItem('pp_last');
+  if (lf) { set('k-fetch', timeAgo(new Date(lf))); set('k-fetch-sub', new Date(lf).toLocaleDateString('en-IN')); }
+}
+
+function renderTable() {
+  const wrap = document.getElementById('table-wrap');
+  if (!products.length) return;
+  set('tbl-count', `${products.length} products · ${new Date().toLocaleDateString('en-IN')}`);
+  wrap.innerHTML = `<table>
+    <thead><tr>
+      <th>#</th><th>Brand & Product</th><th>Price</th><th>Discount</th>
+      <th>Rating</th><th>Reviews</th><th>BSR</th><th>Est. Rev/mo</th><th>Stock</th>
+    </tr></thead>
+    <tbody>${products.map(p=>{
+      const r=estimateRevenue(p.price,p.bsr);
+      return `<tr onclick="window.open('${p.url}','_blank')">
+        <td><div class="rank-badge ${p.rank<=3?'r'+p.rank:'rn'}">${p.rank}</div></td>
+        <td><div class="brand-name">${p.brand}</div><div class="brand-sub">${p.name}</div><span style="font-family:'DM Mono',monospace;font-size:9px;color:var(--green);background:rgba(0,229,160,0.1);padding:1px 5px;border-radius:3px;margin-top:2px;display:${detectPackSize(p)?'inline-block':'none'}">${detectPackSize(p)?detectPackSize(p).display:''}</span></td>
+        <td><div class="price-val">₹${fmt(p.price)}</div></td>
+        <td>${p.disc>0?`<span class="disc-pill ${p.disc>20?'d-high':p.disc>10?'d-mid':'d-low'}">${p.disc}%</span>`:'<span class="disc-pill d-low">—</span>'}</td>
+        <td><span class="stars">${'★'.repeat(Math.round(p.rating))}${'☆'.repeat(5-Math.round(p.rating))}</span><span class="rev-count" style="margin-left:4px">${p.rating.toFixed(1)}</span></td>
+        <td><span class="rev-count">${fmt(p.reviews)}</span></td>
+        <td><span class="bsr-val">${p.bsr>0?'#'+fmt(p.bsr):'—'}</span></td>
+        <td><div class="rev-val">${r.monthly>0?'₹'+fmtL(r.monthly):'—'}</div>${r.monthly>0?`<div style="width:60px;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;margin-top:4px;overflow:hidden"><div style="height:100%;border-radius:2px;width:${Math.min(100,Math.round(r.monthly/500000*100))}%;background:linear-gradient(90deg,#ff4d6d,#f5a623,#00e5a0)"></div></div>`:''}</td>
+        <td><span class="stock-pill ${p.inStock?'s-in':'s-out'}">${p.inStock?'● In Stock':'○ Check'}</span></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+function renderRevenueTab() {
+  if (!products.length) return;
+  const revData = products.map(p=>({ ...p, ...estimateRevenue(p.price,p.bsr) }));
+  const catTotal = revData.reduce((s,p)=>s+p.monthly,0);
+  const top = [...revData].sort((a,b)=>b.monthly-a.monthly)[0];
+  const bestBsr = products.filter(p=>p.bsr>0).sort((a,b)=>a.bsr-b.bsr)[0];
+
+  set('rk-top-earner', top?.brand||'—');
+  set('rk-top-earner-rev', top?`₹${fmtL(top.monthly)}/mo`:'—');
+  set('rk-cat-total', `₹${fmtL(catTotal)}`);
+  set('rk-avg-rev', `₹${fmtL(Math.round(catTotal/revData.length))}`);
+  set('rk-best-bsr', bestBsr?`#${fmt(bestBsr.bsr)}`:'—');
+  set('rk-best-bsr-brand', bestBsr?.brand||'—');
+
+  // Revenue table
+  const sorted = [...revData].sort((a,b)=>b.monthly-a.monthly);
+  document.getElementById('rev-table-body').innerHTML = sorted.map((p,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td><div class="brand-name">${p.brand}</div></td>
+      <td><span class="price-val">₹${fmt(p.price)}</span></td>
+      <td><span class="bsr-val">${p.bsr>0?'#'+fmt(p.bsr):'—'}</span></td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2)">${p.units>0?'~'+p.units+' units':'—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text2)">${p.daily>0?'₹'+fmt(p.daily):'—'}</td>
+      <td><div class="rev-val">${p.monthly>0?'₹'+fmtL(p.monthly):'—'}</div></td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${catTotal>0?Math.round(p.monthly/catTotal*100)+'%':'—'}</td>
+      <td>
+        ${p.confidence>0?`<div style="display:flex;align-items:center;gap:6px"><div class="confidence-bar" style="width:50px"><div class="confidence-fill" style="width:${p.confidence}%"></div></div><span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace">${p.confidence}%</span></div>`:`<span style="color:var(--text3);font-size:10px">No BSR</span>`}
+      </td>
+    </tr>`).join('');
+
+  // Full revenue chart
+  destroyChart('c-rev-full');
+  const ctx = document.getElementById('c-rev-full');
+  if (ctx) {
+    charts['c-rev-full'] = new Chart(ctx, {
+      type:'bar',
+      data:{ labels:sorted.map(p=>p.brand), datasets:[{
+        label:'Est. Monthly Revenue (₹)', data:sorted.map(p=>p.monthly),
+        backgroundColor:sorted.map((p,i)=>i===0?'rgba(177,140,254,0.9)':'rgba(177,140,254,0.45)'),
+        borderColor:'#b18cfe', borderWidth:1, borderRadius:6
+      }]},
+      options:{ ...baseChartOpts(), indexAxis:'y',
+        plugins:{...baseChartOpts().plugins, tooltip:{...baseChartOpts().plugins.tooltip,callbacks:{label:ctx=>'₹'+fmtL(ctx.parsed.x)+'/mo'}}},
+        scales:{ x:{...baseChartOpts().scales.x,ticks:{...baseChartOpts().scales.x.ticks,callback:v=>'₹'+fmtL(v)}}, y:{...baseChartOpts().scales.y} }
+      }
+    });
+  }
+}
+
+function renderHistoryTab() {
+  // ── History fetch list ───────────────────────────────────────────────
+  var tbody = document.getElementById('hist-table-body');
+  if (tbody) {
+    tbody.innerHTML = history.length === 0
+      ? '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">No history yet — run a few fetches first</td></tr>'
+      : [...history].reverse().map(function(h) {
+          var avgP = h.items.length ? Math.round(h.items.reduce(function(s,p){return s+p.price;},0)/h.items.length) : 0;
+          var totR = h.items.reduce(function(s,p){return s+p.reviews;},0);
+          var catRev = h.items.reduce(function(s,p){return s+p.rev;},0);
+          var packLabel = h.packSize && h.packSize !== 'any' ? h.packSize : 'All';
+          return '<tr>' +
+            '<td style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--text2)">' + new Date(h.ts).toLocaleString('en-IN') + '</td>' +
+            '<td><span style="font-family:\'DM Mono\',monospace;font-size:10px;background:rgba(0,229,160,0.1);color:var(--green);padding:2px 7px;border-radius:4px">' + packLabel + '</span></td>' +
+            '<td>' + h.items.length + '</td>' +
+            '<td><span class="price-val">₹' + fmt(avgP) + '</span></td>' +
+            '<td><span class="rev-count">' + fmt(totR) + '</span></td>' +
+            '<td><span class="rev-val">₹' + fmtL(catRev) + '</span></td>' +
+            '<td>' + (h.synced ? '<span class="tag connected">● synced</span>' : '<span class="tag pending">● local</span>') + '</td>' +
+          '</tr>';
+        }).join('');
+  }
+
+  if (history.length < 2) {
+    ['c-trend-price','c-trend-reviews','c-trend-rev'].forEach(function(id) {
+      var wrap = document.getElementById('wrap-' + id.replace('c-',''));
+      if (wrap) wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:12px;flex-direction:column;gap:8px"><div style="font-size:28px">📈</div><div>Appears after 2+ fetches</div></div>';
+    });
+    return;
+  }
+
+  // ── Group history by pack size for clean charts ───────────────────────
+  // Get selected pack size from current filter
+  var activePack = CFG.packSize || 'any';
+
+  // Filter history to matching pack size (or use all if 'any')
+  var filteredHistory = history.filter(function(h) {
+    if (activePack === 'any') return true;
+    return !h.packSize || h.packSize === activePack || h.packSize === 'any';
+  });
+
+  if (filteredHistory.length < 2) filteredHistory = history; // fallback to all
+
+  // Get top 5 brands from CURRENT products (most relevant)
+  var top5 = products.length > 0
+    ? products.slice(0,5).map(function(p){return p.brand;})
+    : filteredHistory[filteredHistory.length-1].items.slice(0,5).map(function(p){return p.brand;});
+
+  // Deduplicate brands
+  top5 = top5.filter(function(b,i){return top5.indexOf(b)===i;}).slice(0,5);
+
+  var COLORS = ['#00e5a0','#f5a623','#4da6ff','#ff4d6d','#b18cfe'];
+  var labels = filteredHistory.map(function(h) {
+    var d = new Date(h.ts);
+    var pack = h.packSize && h.packSize !== 'any' ? ' ['+h.packSize+']' : '';
+    return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) + ' ' +
+           d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) + pack;
+  });
+
+  var baseOpts = {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{
+      legend:{display:true,labels:{color:'#7a8a9a',font:{size:10},boxWidth:10,padding:12}},
+      tooltip:{backgroundColor:'#1a2332',titleColor:'#e8edf3',bodyColor:'#7a8a9a',
+               borderColor:'rgba(255,255,255,0.08)',borderWidth:1,padding:10,cornerRadius:7}
+    },
+    scales:{
+      x:{ticks:{color:'#7a8a9a',font:{size:8},maxRotation:30,maxTicksLimit:10},
+         grid:{color:'rgba(255,255,255,0.04)'}},
+      y:{ticks:{color:'#7a8a9a',font:{size:8}},
+         grid:{color:'rgba(255,255,255,0.04)'}}
+    }
+  };
+
+  // ── Price History ──────────────────────────────────────────────────────
+  destroyChart('c-trend-price');
+  var tp = document.getElementById('c-trend-price');
+  if (tp) {
+    charts['c-trend-price'] = new Chart(tp, {
+      type:'line',
+      data:{ labels:labels, datasets:top5.map(function(b,i){
+        return {
+          label:b,
+          data:filteredHistory.map(function(h){
+            var p=h.items.find(function(x){return x.brand===b;});
+            return p?p.price:null;
+          }),
+          borderColor:COLORS[i], backgroundColor:'transparent',
+          borderWidth:2, pointRadius:3, tension:0.4, spanGaps:true
+        };
+      })},
+      options: Object.assign({},baseOpts,{
+        plugins: Object.assign({},baseOpts.plugins),
+        scales: Object.assign({},baseOpts.scales,{
+          y: Object.assign({},baseOpts.scales.y,{
+            ticks: Object.assign({},baseOpts.scales.y.ticks,{
+              callback:function(v){return '₹'+fmt(v);}
+            }),
+            title:{display:true,text:'Price (₹)',color:'#7a8a9a',font:{size:9}}
+          })
+        })
+      })
+    });
+  }
+
+  // ── Review Growth ──────────────────────────────────────────────────────
+  destroyChart('c-trend-reviews');
+  var tr = document.getElementById('c-trend-reviews');
+  if (tr) {
+    charts['c-trend-reviews'] = new Chart(tr, {
+      type:'line',
+      data:{ labels:labels, datasets:top5.map(function(b,i){
+        return {
+          label:b,
+          data:filteredHistory.map(function(h){
+            var p=h.items.find(function(x){return x.brand===b;});
+            return p?p.reviews:null;
+          }),
+          borderColor:COLORS[i], backgroundColor:'transparent',
+          borderWidth:2, pointRadius:3, tension:0.4, spanGaps:true
+        };
+      })},
+      options: Object.assign({},baseOpts,{
+        scales: Object.assign({},baseOpts.scales,{
+          y: Object.assign({},baseOpts.scales.y,{
+            ticks: Object.assign({},baseOpts.scales.y.ticks,{
+              callback:function(v){return fmt(v);}
+            }),
+            title:{display:true,text:'Reviews',color:'#7a8a9a',font:{size:9}}
+          })
+        })
+      })
+    });
+  }
+
+  // ── Revenue History ────────────────────────────────────────────────────
+  destroyChart('c-trend-rev');
+  var tv = document.getElementById('c-trend-rev');
+  if (tv) {
+    charts['c-trend-rev'] = new Chart(tv, {
+      type:'line',
+      data:{ labels:labels, datasets:top5.map(function(b,i){
+        return {
+          label:b,
+          data:filteredHistory.map(function(h){
+            var p=h.items.find(function(x){return x.brand===b;});
+            return p?p.rev:null;
+          }),
+          borderColor:COLORS[i], backgroundColor:'transparent',
+          borderWidth:2, pointRadius:3, tension:0.4, spanGaps:true
+        };
+      })},
+      options: Object.assign({},baseOpts,{
+        scales: Object.assign({},baseOpts.scales,{
+          y: Object.assign({},baseOpts.scales.y,{
+            ticks: Object.assign({},baseOpts.scales.y.ticks,{
+              callback:function(v){return '₹'+fmtL(v);}
+            }),
+            title:{display:true,text:'Est. Revenue',color:'#7a8a9a',font:{size:9}}
+          })
+        })
+      })
+    });
+  }
+}
+
+function renderCharts() {
+  if (!products.length) return;
+  const labels  = products.map(p=>p.brand);
+  const prices  = products.map(p=>p.price);
+  const ratings = products.map(p=>p.rating);
+  const reviews = products.map(p=>p.reviews);
+  const discs   = products.map(p=>p.disc);
+  const bsrs    = products.map(p=>p.bsr||0);
+  const revs    = products.map(p=>estimateRevenue(p.price,p.bsr).monthly);
+  const opts    = baseChartOpts();
+
+  destroyChart('c-price');
+  const cp = document.getElementById('c-price');
+  if(cp) charts['c-price'] = new Chart(cp,{type:'bar',data:{labels,datasets:[{label:'Price',data:prices,backgroundColor:prices.map(p=>p===Math.min(...prices.filter(x=>x>0))?'rgba(0,229,160,0.9)':'rgba(0,229,160,0.4)'),borderColor:'#00e5a0',borderWidth:1,borderRadius:6}]},options:{...opts,indexAxis:'y',plugins:{...opts.plugins},scales:{x:{...opts.scales.x,ticks:{...opts.scales.x.ticks,callback:v=>'₹'+fmt(v)}},y:{...opts.scales.y}}}});
+
+  destroyChart('c-rating');
+  const cr = document.getElementById('c-rating');
+  if(cr) charts['c-rating'] = new Chart(cr,{type:'bar',data:{labels,datasets:[{label:'Rating',data:ratings,backgroundColor:'rgba(245,166,35,0.6)',borderColor:'#f5a623',borderWidth:1,borderRadius:5,yAxisID:'y'},{label:'Reviews',data:reviews,type:'line',borderColor:'#4da6ff',backgroundColor:'rgba(77,166,255,0.1)',borderWidth:2.5,pointRadius:4,tension:0.4,fill:true,yAxisID:'y1'}]},options:{...opts,plugins:{...opts.plugins,legend:{display:true,labels:{color:'#7a8a9a',font:{size:10},boxWidth:10,padding:12}}},scales:{x:{...opts.scales.x},y:{...opts.scales.y,position:'left',title:{display:true,text:'Rating',color:'#7a8a9a',font:{size:9}},min:0,max:5},y1:{...opts.scales.y,position:'right',title:{display:true,text:'Reviews',color:'#7a8a9a',font:{size:9}},grid:{display:false}}}}});
+
+  // Discount chart — only render if we have actual discount data
+  destroyChart('c-disc');
+  const cd = document.getElementById('c-disc');
+  if(cd) {
+    const hasDisc = discs.some(d=>d>0);
+    if (hasDisc) {
+      charts['c-disc'] = new Chart(cd,{type:'bar',data:{labels,datasets:[{label:'Discount%',data:discs,backgroundColor:discs.map(d=>d>20?'rgba(255,77,109,0.7)':d>10?'rgba(245,166,35,0.7)':'rgba(77,166,255,0.4)'),borderColor:discs.map(d=>d>20?'#ff4d6d':d>10?'#f5a623':'#4da6ff'),borderWidth:1,borderRadius:5}]},options:{...opts}});
+    } else {
+      cd.parentElement.innerHTML = '<div id="wrap-disc" class="chart-wrap h200">' +
+        noDataMsg('Discount data not available from search results.') +
+        '<canvas id="c-disc" style="display:none"></canvas></div>';
+    }
+  }
+
+  // BSR chart — only if we have BSR (requires step 2 fetch / product pages)
+  destroyChart('c-bsr');
+  const cb = document.getElementById('c-bsr');
+  if(cb) {
+    const hasBsr = bsrs.some(b=>b>0);
+    if (hasBsr) {
+      charts['c-bsr'] = new Chart(cb,{type:'bar',data:{labels,datasets:[{label:'BSR',data:bsrs,backgroundColor:'rgba(77,166,255,0.5)',borderColor:'#4da6ff',borderWidth:1,borderRadius:5}]},options:{...opts,plugins:{...opts.plugins,tooltip:{...opts.plugins.tooltip,callbacks:{label:ctx=>ctx.parsed.y===0?'N/A':'#'+fmt(ctx.parsed.y)}}}}});
+    } else {
+      cb.parentElement.innerHTML = '<div id="wrap-bsr" class="chart-wrap h200">' +
+        noDataMsg('BSR requires fetching individual product pages. Run Refresh or click Re-fetch BSR.') +
+        '<canvas id="c-bsr" style="display:none"></canvas></div>';
+    }
+  }
+
+  // Revenue chart — depends on BSR
+  destroyChart('c-rev');
+  const cv = document.getElementById('c-rev');
+  if(cv) {
+    const hasRev = revs.some(r=>r>0);
+    if (hasRev) {
+      charts['c-rev'] = new Chart(cv,{type:'bar',data:{labels,datasets:[{label:'Est. Rev/mo',data:revs,backgroundColor:'rgba(177,140,254,0.6)',borderColor:'#b18cfe',borderWidth:1,borderRadius:5}]},options:{...opts,plugins:{...opts.plugins,tooltip:{...opts.plugins.tooltip,callbacks:{label:ctx=>'₹'+fmtL(ctx.parsed.y)+'/mo'}}},scales:{x:{...opts.scales.x},y:{...opts.scales.y,ticks:{...opts.scales.y.ticks,callback:v=>'₹'+fmtL(v)}}}}});
+    } else {
+      cv.parentElement.innerHTML = '<div id="wrap-rev" class="chart-wrap h200">' +
+        noDataMsg('Revenue = 0 because BSR = 0. Run Refresh or Re-fetch BSR.') +
+        '<canvas id="c-rev" style="display:none"></canvas></div>';
+    }
+  }
+}
+
+function baseChartOpts() {
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{backgroundColor:'#1a2332',titleColor:'#e8edf3',bodyColor:'#7a8a9a',borderColor:'rgba(255,255,255,0.08)',borderWidth:1,padding:10,cornerRadius:7} },
+    scales:{ x:{ticks:{color:'#7a8a9a',font:{size:8}},grid:{color:'rgba(255,255,255,0.04)'}}, y:{ticks:{color:'#7a8a9a',font:{size:8}},grid:{color:'rgba(255,255,255,0.04)'}} }
+  };
+}
+
+function destroyChart(id) {
+  if (charts[id]) {
+    try { charts[id].destroy(); } catch(e) {}
+    delete charts[id];
+  }
+  // Ensure canvas exists — noDataMsg() may have replaced it with a div
+  ensureCanvas(id);
+}
+
+function ensureCanvas(id) {
+  var wrapMap = {
+    'c-bsr':'wrap-bsr','c-rev':'wrap-rev','c-disc':'wrap-disc',
+    'c-price':'wrap-price','c-rating':'wrap-rating',
+    'c-trend-price':'wrap-tp','c-trend-reviews':'wrap-tr',
+    'c-trend-rev':'wrap-tv','c-rev-full':'wrap-revfull'
+  };
+  var wrapId = wrapMap[id];
+  var wrap = wrapId ? document.getElementById(wrapId) : null;
+  if (wrap) {
+    // Always wipe the wrapper completely — removes noDataMsg + any old canvas
+    wrap.innerHTML = '';
+    var nc = document.createElement('canvas');
+    nc.id = id;
+    wrap.appendChild(nc);
+    return;
+  }
+  // Fallback: replace canvas in-place if wrapper not found
+  var el = document.getElementById(id);
+  if (el) {
+    var parent = el.parentNode;
+    var nc2 = document.createElement('canvas');
+    nc2.id = id;
+    parent.replaceChild(nc2, el);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════════════
+function exportCSV() {
+  if (!products.length) return toast('No data to export','error');
+  const rows = [['Rank','Brand','Name','ASIN','Price','MRP','Disc%','Rating','Reviews','BSR','Est.Rev/mo','Seller','Stock']];
+  products.forEach(p=>{ const r=estimateRevenue(p.price,p.bsr); rows.push([p.rank,p.brand,p.name,p.asin,p.price,p.mrp,p.disc,p.rating,p.reviews,p.bsr,r.monthly,p.seller,p.inStock?'Yes':'Check']); });
+  const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download=`plantpulse_${new Date().toLocaleDateString('en-IN').replace(/\//g,'-')}.csv`; a.click();
+  toast('⬇ CSV exported','success');
+}
+
+// ═══════════════════════════════════════════════════
+// UI UTILS
+// ═══════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name==='history') renderHistoryTab();
+}
+
+function setStatus(type, txt) {
+  const pill=document.getElementById('status-pill');
+  pill.className='status-pill '+type;
+  set('status-text',txt);
+}
+
+function setSyncStatus(s) {
+  const dot=document.getElementById('sync-dot'), txt=document.getElementById('sync-text');
+  if(!dot) return;
+  dot.className='sync-dot '+s;
+  txt.textContent = s==='synced'?'Sheets ✓':s==='syncing'?'Syncing...':'Sheets error';
+  document.getElementById('sync-row').style.display='flex';
+}
+
+function setTag(id, cls, txt) {
+  const el=document.getElementById(id); if(!el) return;
+  el.className='tag '+cls; el.textContent=txt;
+}
+
+function updateLastFetch() {
+  const lf=localStorage.getItem('pp_last');
+  if(lf) { set('k-fetch',timeAgo(new Date(lf))); set('k-fetch-sub',new Date(lf).toLocaleDateString('en-IN')); }
+}
+
+function setLoad(p,m) { document.getElementById('lb').style.width=p+'%'; document.getElementById('ls').textContent=m; }
+function hideLoading() { const o=document.getElementById('loading-overlay'); o.style.transition='opacity .5s'; o.style.opacity='0'; setTimeout(()=>o.style.display='none',500); }
+function toast(msg,type='') { const t=document.getElementById('toast'); t.textContent=msg; t.className='show '+type; clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),4000); }
+function set(id,v) { const e=document.getElementById(id); if(e) e.textContent=v; }
+function val(id) { const e=document.getElementById(id); return e?e.value:''; }
+function setVal(id,v) { const e=document.getElementById(id); if(e) e.value=v; }
+function chk(id,v) { const e=document.getElementById(id); if(e) e.checked=!!v; }
+function chkVal(id) { const e=document.getElementById(id); return e?e.checked:false; }
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+function fmt(n) { return Number(n).toLocaleString('en-IN'); }
+function fmtL(n) { if(n>=10000000) return (n/10000000).toFixed(1)+'Cr'; if(n>=100000) return (n/100000).toFixed(1)+'L'; if(n>=1000) return (n/1000).toFixed(0)+'K'; return fmt(n); }
+function timeAgo(d) { const s=Math.round((Date.now()-d.getTime())/1000); if(s<10) return 'just now'; if(s<60) return s+'s ago'; if(s<3600) return Math.round(s/60)+'m ago'; if(s<86400) return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
+function openLink(url) { window.open(url,'_blank'); }
+
+// ── Pack size detection & filtering ─────────────────────────────────────────
+function detectPackSize(name) {
+  if (!name) return null;
+  var s = String(name).toLowerCase();
+  // Match patterns like: 1kg, 1 kg, 1000g, 1000 g, 2.2lb etc
+  var patterns = [
+    { re: /(\d+\.?\d*)\s*kg/,   unit: 'kg',   toG: function(v){ return v * 1000; } },
+    { re: /(\d+\.?\d*)\s*g/,  unit: 'g',    toG: function(v){ return v; } },
+    { re: /(\d+\.?\d*)\s*lb/,   unit: 'lb',   toG: function(v){ return v * 453.6; } },
+    { re: /(\d+\.?\d*)\s*lbs/,  unit: 'lbs',  toG: function(v){ return v * 453.6; } },
+  ];
+  for (var pi = 0; pi < patterns.length; pi++) {
+    var m = s.match(patterns[pi].re);
+    if (m) {
+      var grams = patterns[pi].toG(parseFloat(m[1]));
+      return { grams: Math.round(grams), display: m[1] + patterns[pi].unit };
+    }
+  }
+  return null;
+}
+
+function packSizeMatchesFilter(product, filterStr) {
+  if (!filterStr || filterStr === 'any') return true;
+  var nm = (product && typeof product === 'object') ? (product.name || product.product_title || '') : (product || '');
+  var detected = detectPackSize(nm);
+  if (!detected) return false; // no size found — exclude when filtering is active
+  // Parse filter string e.g. "1kg" → 1000g, "500g" → 500g
+  var filterMatch = filterStr.match(/^(\d+\.?\d*)(kg|g)$/i);
+  if (!filterMatch) return true;
+  var filterGrams = filterMatch[2].toLowerCase() === 'kg'
+    ? parseFloat(filterMatch[1]) * 1000
+    : parseFloat(filterMatch[1]);
+  // Allow ±15% tolerance (e.g. "1kg" matches 850g-1150g)
+  var tolerance = filterGrams * 0.15;
+  return Math.abs(detected.grams - filterGrams) <= tolerance;
+}
+
+function decodeHtml(str) {
+  if (!str || typeof str !== 'string') return str;
+  const txt = document.createElement('textarea');
+  txt.innerHTML = str;
+  return txt.value;
+}
+
+async function testRapidAPI() {
+  const key = val('cfg-rapid') || CFG.rapidKey;
+  if (!key) { toast('Enter your RapidAPI key first', 'error'); return; }
+  try {
+    setTag('rapid-tag','pending','● testing...');
+    // Test with a known ASIN (Amway Nutrilite protein - commonly listed on amazon.in)
+    const url = 'https://real-time-amazon-data.p.rapidapi.com/product-details?asin=B082GS37TG&country=IN';
+    const r = await fetch(url, { headers:{ 'X-RapidAPI-Key':key, 'X-RapidAPI-Host':'real-time-amazon-data.p.rapidapi.com' } });
+    if (r.status === 200) {
+      const j = await r.json();
+      setTag('rapid-tag','connected','● connected');
+      document.getElementById('rapid-card').classList.add('connected');
+      CFG.rapidKey = key;
+      localStorage.setItem('pp_cfg', JSON.stringify(CFG));
+      toast('✅ RapidAPI connected! BSR will be fetched on next Refresh.', 'success');
+    } else if (r.status === 403 || r.status === 401) {
+      setTag('rapid-tag','error','● invalid key');
+      toast('❌ Invalid RapidAPI key', 'error');
+    } else {
+      setTag('rapid-tag','error','● error ' + r.status);
+      toast('⚠ RapidAPI returned ' + r.status, 'error');
+    }
+  } catch(e) {
+    setTag('rapid-tag','error','● network error');
+    toast('❌ ' + e.message, 'error');
+  }
+}
+
+function noDataMsg(reason) {
+  return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px;padding:16px;text-align:center">
+    <div style="font-size:28px;opacity:.4">📭</div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6">${reason}</div>
+  </div>`;
+}
+</script>
+</body>
+</html>
+HTMLEOF
