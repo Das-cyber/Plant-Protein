@@ -392,7 +392,7 @@ tbody td{padding:12px 14px;font-size:11px;vertical-align:middle;white-space:nowr
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
     <span style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);letter-spacing:1px;text-transform:uppercase">Showing:</span>
     <div style="display:flex;gap:4px">
-      <button onclick="CFG.packSize='any';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">All sizes</button>
+      <button onclick="CFG.packSize='any';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">All</button>
       <button onclick="CFG.packSize='500g';renderHistoryTab()" class="ps-btn" style="font-size:10px;padding:3px 10px">500g</button>
       <button onclick="CFG.packSize='1kg';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">1 kg</button>
       <button onclick="CFG.packSize='2kg';renderHistoryTab()"  class="ps-btn" style="font-size:10px;padding:3px 10px">2 kg</button>
@@ -402,7 +402,7 @@ tbody td{padding:12px 14px;font-size:11px;vertical-align:middle;white-space:nowr
   <div class="charts-grid" style="margin-bottom:20px">
     <div class="chart-card full">
       <div class="chart-title">Price History — Top 5 Brands <span class="badge">ALL FETCHES</span></div>
-      <div class="chart-wrap h320" id="wrap-c-trend-price"><canvas id="c-trend-price"></canvas></div>
+      <div class="chart-wrap h320" id="wrap-tp"><canvas id="c-trend-price"></canvas></div>
     </div>
   </div>
   <div class="charts-grid" style="margin-bottom:20px">
@@ -807,16 +807,38 @@ function loadHistory() {
   try { history = JSON.parse(localStorage.getItem('pp_history')||'[]'); } catch(e){history=[];}
 }
 function loadHistoryForPack(pack) {
+  // ALWAYS include global history as base — migrate old untagged entries
+  var all = history.slice();
+
   if (!pack || pack === 'any') {
-    // Return only snapshots tagged as 'any' or untagged
-    return history.filter(function(h){ return !h.packSize || h.packSize === 'any'; });
+    return all; // show everything in 'All sizes' view
   }
+
+  // Try pack-specific store first
+  var packSpecific = [];
   try {
-    var stored = JSON.parse(localStorage.getItem('pp_history_' + pack)||'[]');
-    if (stored.length > 0) return stored;
-    // Fallback: filter global history
-    return history.filter(function(h){ return h.packSize === pack; });
-  } catch(e) { return []; }
+    packSpecific = JSON.parse(localStorage.getItem('pp_history_' + pack)||'[]');
+  } catch(e){}
+
+  // Also filter global history for this pack size
+  var fromGlobal = all.filter(function(h){
+    return h.packSize === pack;
+  });
+
+  // Merge, deduplicate by timestamp
+  var merged = packSpecific.concat(fromGlobal);
+  var seen = {};
+  merged = merged.filter(function(h){
+    if (seen[h.ts]) return false;
+    seen[h.ts] = true;
+    return true;
+  });
+
+  // Sort by time
+  merged.sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
+
+  // If still nothing, return all history so charts aren't blank
+  return merged.length >= 2 ? merged : all;
 }
 function appendHistory(data) {
   const rev = data.map(p=>estimateRevenue(p.price,p.bsr).monthly);
@@ -1345,49 +1367,42 @@ function pNum(v) { if (typeof v==='number') return v; return parseFloat(String(v
 // ═══════════════════════════════════════════════════
 async function syncToSheets() {
   if (!CFG.sheetsUrl) { toast('Add Apps Script URL in Settings first', 'error'); return; }
+  if (!products.length) { toast('No data to sync', 'error'); return; }
   setSyncStatus('syncing');
   try {
     var pack = (CFG.packSize && CFG.packSize !== 'any') ? CFG.packSize : 'All';
     var ts   = new Date().toLocaleString('en-IN');
 
-    var rows = [[
-      'Brand', 'Pack Size', 'Price (INR)', 'Discount %',
-      'Rating', 'Reviews', 'BSR', 'Est. Revenue/mo (INR)', 'Fetched At'
-    ]];
-    products.forEach(function(p) {
+    // Send header row first
+    var header = ['Brand','Pack Size','Price','Discount%','Rating','Reviews','BSR','Est.Rev/mo','Fetched At'];
+    var url = CFG.sheetsUrl + '?action=clear&sheet=LiveData';
+    await fetch(url).catch(function(){});
+    await sleep(500);
+
+    // Send header
+    var hUrl = CFG.sheetsUrl + '?action=header&sheet=LiveData&data=' + encodeURIComponent(JSON.stringify(header));
+    await fetch(hUrl).catch(function(){});
+    await sleep(300);
+
+    // Send each product row individually (avoids URL length limit)
+    for (var i = 0; i < products.length; i++) {
+      var p   = products[i];
       var ps  = detectPackSize(p.name);
       var rev = estimateRevenue(p.price, p.bsr);
-      rows.push([
-        p.brand, ps ? ps.display : pack,
-        p.price||0, p.disc||0, p.rating||0,
-        p.reviews||0, p.bsr||0, rev.monthly||0, ts
-      ]);
-    });
-
-    var payload = JSON.stringify({ action:'write', sheet:'LiveData', values:rows });
-    console.log('[Sheets] POST to:', CFG.sheetsUrl);
-    console.log('[Sheets] Payload size:', payload.length, 'chars');
-    console.log('[Sheets] Sample row:', JSON.stringify(rows[1]));
-
-    // Google Apps Script Web Apps on github.io: use no-cors
-    // The request WILL arrive — we just can't read the response
-    // To verify: open your Apps Script URL in browser, should show "PlantPulse connected"
-    await fetch(CFG.sheetsUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: payload
-    });
-
-    console.log('[Sheets] Request fired. Check your Google Sheet in 5 seconds.');
-    console.log('[Sheets] If sheet is empty, verify: 1) URL is correct 2) Deployed as "Anyone" 3) Open URL in browser shows PlantPulse connected');
+      var row = [p.brand, ps?ps.display:pack, p.price||0, p.disc||0, p.rating||0, p.reviews||0, p.bsr||0, rev.monthly||0, ts];
+      var rUrl = CFG.sheetsUrl + '?action=append&sheet=LiveData&data=' + encodeURIComponent(JSON.stringify(row));
+      var resp = await fetch(rUrl);
+      var txt  = await resp.text();
+      console.log('[Sheets] Row', i+1, ':', txt);
+      await sleep(200);
+    }
 
     if (history.length) {
       history[history.length-1].synced = true;
       localStorage.setItem('pp_history', JSON.stringify(history));
     }
     setSyncStatus('synced');
-    toast('Sync request sent — check your sheet in 5 seconds', 'success');
+    toast('Synced ' + products.length + ' rows to Google Sheets!', 'success');
   } catch(e) {
     setSyncStatus('error');
     toast('Sheets error: ' + e.message, 'error');
@@ -1669,10 +1684,10 @@ function renderHistoryTab() {
   var filteredHistory = loadHistoryForPack(activePack);
 
   if (filteredHistory.length < 2) {
-    var msg = activePack === 'any'
-      ? 'Run Refresh a few times to build history'
-      : 'No ' + activePack + ' history yet — select ' + activePack + ' in Pack Size and click Refresh';
-    ['wrap-c-trend-price','wrap-tp','wrap-tr','wrap-tv'].forEach(function(wid) {
+    var msg = history.length < 2
+      ? 'Run Refresh 2+ times to build history charts'
+      : (activePack !== 'any' ? 'No ' + activePack + ' fetches yet — switch to All or fetch with ' + activePack + ' selected' : 'Need 2+ fetches');
+    ['wrap-tp','wrap-tr','wrap-tv'].forEach(function(wid) {
       var wrap = document.getElementById(wid);
       if (wrap) wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:12px;flex-direction:column;gap:8px"><div style="font-size:28px">📈</div><div>' + msg + '</div></div>';
     });
@@ -1891,7 +1906,8 @@ function ensureCanvas(id) {
     'c-bsr':'wrap-bsr','c-rev':'wrap-rev','c-disc':'wrap-disc',
     'c-price':'wrap-price','c-rating':'wrap-rating',
     'c-trend-price':'wrap-tp','c-trend-reviews':'wrap-tr',
-    'c-trend-rev':'wrap-tv','c-rev-full':'wrap-revfull'
+    'c-trend-rev':'wrap-tv','c-rev-full':'wrap-revfull',
+    'trend-price':'wrap-tp','trend-reviews':'wrap-tr','trend-rev':'wrap-tv'
   };
   var wrapId = wrapMap[id];
   var wrap = wrapId ? document.getElementById(wrapId) : null;
