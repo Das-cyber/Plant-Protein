@@ -1369,32 +1369,49 @@ async function syncToSheets() {
   if (!CFG.sheetsUrl) { toast('Add Apps Script URL in Settings first', 'error'); return; }
   if (!products.length) { toast('No data to sync', 'error'); return; }
   setSyncStatus('syncing');
+
+  // fireGet: loads URL as image — bypasses ALL CORS/redirect issues
+  function fireGet(url) {
+    return new Promise(function(resolve) {
+      var img = new Image();
+      img.onload = img.onerror = function() { resolve(); };
+      img.src = url;
+      setTimeout(resolve, 2000); // max 2s per call
+    });
+  }
+
   try {
     var pack = (CFG.packSize && CFG.packSize !== 'any') ? CFG.packSize : 'All';
     var ts   = new Date().toLocaleString('en-IN');
+    var base = CFG.sheetsUrl;
 
-    // Send header row first
+    // Step 1: clear sheet
+    await fireGet(base + '?action=clear&sheet=LiveData');
+    await sleep(400);
+
+    // Step 2: write header
     var header = ['Brand','Pack Size','Price','Discount%','Rating','Reviews','BSR','Est.Rev/mo','Fetched At'];
-    var url = CFG.sheetsUrl + '?action=clear&sheet=LiveData';
-    await fetch(url).catch(function(){});
-    await sleep(500);
+    await fireGet(base + '?action=header&sheet=LiveData&data=' + encodeURIComponent(JSON.stringify(header)));
+    await sleep(400);
 
-    // Send header
-    var hUrl = CFG.sheetsUrl + '?action=header&sheet=LiveData&data=' + encodeURIComponent(JSON.stringify(header));
-    await fetch(hUrl).catch(function(){});
-    await sleep(300);
-
-    // Send each product row individually (avoids URL length limit)
+    // Step 3: append each product row
     for (var i = 0; i < products.length; i++) {
       var p   = products[i];
       var ps  = detectPackSize(p.name);
       var rev = estimateRevenue(p.price, p.bsr);
-      var row = [p.brand, ps?ps.display:pack, p.price||0, p.disc||0, p.rating||0, p.reviews||0, p.bsr||0, rev.monthly||0, ts];
-      var rUrl = CFG.sheetsUrl + '?action=append&sheet=LiveData&data=' + encodeURIComponent(JSON.stringify(row));
-      var resp = await fetch(rUrl);
-      var txt  = await resp.text();
-      console.log('[Sheets] Row', i+1, ':', txt);
-      await sleep(200);
+      var row = [
+        p.brand,
+        ps ? ps.display : pack,
+        p.price   || 0,
+        p.disc    || 0,
+        p.rating  || 0,
+        p.reviews || 0,
+        p.bsr     || 0,
+        rev.monthly || 0,
+        ts
+      ];
+      await fireGet(base + '?action=append&sheet=LiveData&data=' + encodeURIComponent(JSON.stringify(row)));
+      await sleep(300);
     }
 
     if (history.length) {
@@ -1403,6 +1420,7 @@ async function syncToSheets() {
     }
     setSyncStatus('synced');
     toast('Synced ' + products.length + ' rows to Google Sheets!', 'success');
+
   } catch(e) {
     setSyncStatus('error');
     toast('Sheets error: ' + e.message, 'error');
