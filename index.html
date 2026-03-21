@@ -520,12 +520,14 @@ function doGet(e) {
 
     if (act === 'clear') {
       sheet.clearContents();
-    } else if (act === 'header') {
+    } else if (act === 'init' || act === 'header') {
+      // Clear everything and write header row
       sheet.clearContents();
       sheet.getRange(1,1,1,data.length).setValues([data]);
       sheet.getRange(1,1,1,data.length).setFontWeight('bold').setBackground('#C8E6C9');
       sheet.autoResizeColumns(1, data.length);
     } else if (act === 'ensureHeader') {
+      // Only write header if sheet is empty
       if (sheet.getLastRow() === 0) {
         sheet.getRange(1,1,1,data.length).setValues([data]);
         sheet.getRange(1,1,1,data.length).setFontWeight('bold').setBackground('#E3F2FD');
@@ -1429,19 +1431,20 @@ async function syncToSheets() {
 
   async function sheetClear(name) {
     await fireGet(CFG.sheetsUrl + '?action=clear&sheet=' + encodeURIComponent(name));
-    await sleep(300);
+    await sleep(400);
   }
   async function sheetHeader(name, hdr) {
-    await fireGet(CFG.sheetsUrl + '?action=header&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(hdr)));
-    await sleep(300);
+    // Use 'init' action — clears AND writes header in one call (avoids race condition)
+    await fireGet(CFG.sheetsUrl + '?action=init&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(hdr)));
+    await sleep(500);
   }
   async function sheetEnsureHeader(name, hdr) {
     await fireGet(CFG.sheetsUrl + '?action=ensureHeader&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(hdr)));
-    await sleep(300);
+    await sleep(400);
   }
   async function sheetAppend(name, row) {
     await fireGet(CFG.sheetsUrl + '?action=append&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(row)));
-    await sleep(250);
+    await sleep(300);
   }
 
   try {
@@ -1457,17 +1460,21 @@ async function syncToSheets() {
 
     // ── Sheet 1: LiveData — always current, overwrite ──────────────────
     toast('Writing LiveData...', 'success');
-    await sheetClear('LiveData');
-    await sheetHeader('LiveData', HDR);
+    await sheetHeader('LiveData', HDR); // init = clear + header in one call
     for (var i=0; i<products.length; i++) {
       await sheetAppend('LiveData', makeRow(products[i]));
     }
 
     // ── Sheet 2: History_500g — append 500g products only ─────────────
+    // 500g: match 400g-600g range
     var prods500 = products.filter(function(p){
       var ps = detectPackSize(p.name);
-      return ps && ps.grams >= 450 && ps.grams <= 550;
+      return ps && ps.grams >= 400 && ps.grams <= 600;
     });
+    // If none detected, try current pack size filter
+    if (prods500.length === 0 && CFG.packSize === '500g') {
+      prods500 = products.slice();
+    }
     if (prods500.length > 0) {
       await sheetEnsureHeader('History_500g', HDR);
       for (var j=0; j<prods500.length; j++) {
@@ -1476,10 +1483,15 @@ async function syncToSheets() {
     }
 
     // ── Sheet 3: History_1kg — append 1kg products only ───────────────
+    // 1kg: match 850g-1150g range
     var prods1kg = products.filter(function(p){
       var ps = detectPackSize(p.name);
-      return ps && ps.grams >= 900 && ps.grams <= 1100;
+      return ps && ps.grams >= 850 && ps.grams <= 1150;
     });
+    // If none detected, try current pack size filter
+    if (prods1kg.length === 0 && CFG.packSize === '1kg') {
+      prods1kg = products.slice();
+    }
     if (prods1kg.length > 0) {
       await sheetEnsureHeader('History_1kg', HDR);
       for (var k=0; k<prods1kg.length; k++) {
