@@ -517,14 +517,14 @@ function doGet(e) {
 
     if (act === 'clear') {
       sheet.clearContents();
-    } else if (act === 'init' || act === 'header') {
-      // Clear everything and write header row
+    } else if (act === 'init') {
+      // Clear + write header with green formatting
       sheet.clearContents();
       sheet.getRange(1,1,1,data.length).setValues([data]);
       sheet.getRange(1,1,1,data.length).setFontWeight('bold').setBackground('#C8E6C9');
       sheet.autoResizeColumns(1, data.length);
     } else if (act === 'ensureHeader') {
-      // Only write header if sheet is empty
+      // Write header only if sheet is empty
       if (sheet.getLastRow() === 0) {
         sheet.getRange(1,1,1,data.length).setValues([data]);
         sheet.getRange(1,1,1,data.length).setFontWeight('bold').setBackground('#E3F2FD');
@@ -532,10 +532,20 @@ function doGet(e) {
       }
     } else if (act === 'append') {
       sheet.appendRow(data);
+    } else if (act === 'brandInit') {
+      // Company sheet: clear + split header (500g left | gap | 1kg right)
+      sheet.clearContents();
+      sheet.getRange(1,1,1,data.length).setValues([data]);
+      // Green for 500g cols (1-9), light blue for 1kg cols (12-20)
+      sheet.getRange(1,1,1,9).setFontWeight('bold').setBackground('#C8E6C9');
+      sheet.getRange(1,12,1,9).setFontWeight('bold').setBackground('#BBDEFB');
+      sheet.autoResizeColumns(1, data.length);
+    } else if (act === 'appendBrand') {
+      sheet.appendRow(data);
     }
     return ContentService.createTextOutput('ok');
   } catch(err) {
-    return ContentService.createTextOutput('error:'+err.message);
+    return ContentService.createTextOutput('error:' + err.message);
   }
 }</div>
           </div>
@@ -1424,74 +1434,112 @@ async function syncToSheets() {
       setTimeout(resolve, 3000);
     });
   }
-
-  async function sheetClear(name) {
-    await fireGet(CFG.sheetsUrl + '?action=clear&sheet=' + encodeURIComponent(name));
-    await sleep(400);
-  }
-  async function sheetHeader(name, hdr) {
-    // Use 'init' action — clears AND writes header in one call (avoids race condition)
-    await fireGet(CFG.sheetsUrl + '?action=init&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(hdr)));
-    await sleep(500);
-  }
-  async function sheetEnsureHeader(name, hdr) {
-    await fireGet(CFG.sheetsUrl + '?action=ensureHeader&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(hdr)));
-    await sleep(400);
-  }
-  async function sheetAppend(name, row) {
-    await fireGet(CFG.sheetsUrl + '?action=append&sheet=' + encodeURIComponent(name) + '&data=' + encodeURIComponent(JSON.stringify(row)));
+  async function gasCall(params) {
+    var url = CFG.sheetsUrl + '?' + Object.keys(params).map(function(k){
+      return k + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    await fireGet(url);
     await sleep(300);
   }
 
   try {
-    var ts   = new Date().toLocaleString('en-IN');
-    var HDR  = ['Brand','Pack Size','Price (INR)','Discount %','Rating','Reviews','BSR','Est. Revenue/mo (INR)','Fetched At'];
+    var ts  = new Date().toLocaleString('en-IN');
+    var HDR = ['Brand','Pack Size','Price (INR)','Discount %','Rating','Reviews','BSR','Est. Revenue/mo (INR)','Fetched At'];
 
-    function makeRow(p) {
+    function makeRow(p, packLabel) {
       var ps  = detectPackSize(p.name);
       var rev = estimateRevenue(p.price, p.bsr);
-      var packLabel = ps ? ps.display : (CFG.packSize && CFG.packSize!=='any' ? CFG.packSize : 'All');
-      return [p.brand, packLabel, p.price||0, p.disc||0, p.rating||0, p.reviews||0, p.bsr||0, rev.monthly||0, ts];
+      return [p.brand, ps ? ps.display : packLabel, p.price||0, p.disc||0,
+              p.rating||0, p.reviews||0, p.bsr||0, rev.monthly||0, ts];
     }
 
-    // ── Sheet 1: LiveData ────────────────────────────────────────────────
-    console.log('[Sheets] Writing LiveData header...');
-    await sheetHeader('LiveData', HDR);
-    for (var i=0; i<products.length; i++) {
-      await sheetAppend('LiveData', makeRow(products[i]));
-    }
-    toast('LiveData done. Writing history sheets...', 'success');
-    await sleep(400);
+    // Classify every product by size
+    var prods500 = [], prods1kg = [], prodsOther = [];
+    products.forEach(function(p) {
+      var ps = detectPackSize(p.name);
+      if (ps && ps.grams >= 400 && ps.grams <= 600) prods500.push(p);
+      else if (ps && ps.grams >= 850 && ps.grams <= 1150) prods1kg.push(p);
+      else {
+        // Use current pack size tag as fallback
+        if (CFG.packSize === '500g') prods500.push(p);
+        else if (CFG.packSize === '1kg') prods1kg.push(p);
+        else prodsOther.push(p);
+      }
+    });
 
-    // ── Sheet 2: History_500g ─────────────────────────────────────────
-    var activePack = CFG.packSize || 'any';
-    var prods500 = (activePack === '500g')
-      ? products.slice()
-      : products.filter(function(p){ var ps=detectPackSize(p.name); return ps&&ps.grams>=400&&ps.grams<=600; });
+    // ── 1. LiveData — sorted: 500g first, then 1kg, then other ──────────
+    toast('Writing LiveData...', 'success');
+    await gasCall({ action:'init', sheet:'LiveData', data:JSON.stringify(HDR) });
+    var allSorted = prods500.concat(prods1kg).concat(prodsOther);
+    for (var i=0; i<allSorted.length; i++) {
+      var p = allSorted[i];
+      var ps = detectPackSize(p.name);
+      var lbl = ps ? ps.display : (CFG.packSize !== 'any' ? CFG.packSize : 'Unknown');
+      await gasCall({ action:'append', sheet:'LiveData', data:JSON.stringify(makeRow(p, lbl)) });
+    }
+
+    // ── 2. History_500g — append 500g rows ───────────────────────────────
     if (prods500.length > 0) {
-      console.log('[Sheets] Writing History_500g:', prods500.length, 'rows');
-      await sheetEnsureHeader('History_500g', HDR);
-      for (var j=0; j<prods500.length; j++) { await sheetAppend('History_500g', makeRow(prods500[j])); }
+      await gasCall({ action:'ensureHeader', sheet:'History_500g', data:JSON.stringify(HDR) });
+      for (var j=0; j<prods500.length; j++) {
+        await gasCall({ action:'append', sheet:'History_500g', data:JSON.stringify(makeRow(prods500[j],'500g')) });
+      }
     }
-    await sleep(300);
 
-    // ── Sheet 3: History_1kg ──────────────────────────────────────────
-    var prods1kg = (activePack === '1kg')
-      ? products.slice()
-      : products.filter(function(p){ var ps=detectPackSize(p.name); return ps&&ps.grams>=850&&ps.grams<=1150; });
+    // ── 3. History_1kg — append 1kg rows ────────────────────────────────
     if (prods1kg.length > 0) {
-      console.log('[Sheets] Writing History_1kg:', prods1kg.length, 'rows');
-      await sheetEnsureHeader('History_1kg', HDR);
-      for (var k=0; k<prods1kg.length; k++) { await sheetAppend('History_1kg', makeRow(prods1kg[k])); }
+      await gasCall({ action:'ensureHeader', sheet:'History_1kg', data:JSON.stringify(HDR) });
+      for (var k=0; k<prods1kg.length; k++) {
+        await gasCall({ action:'append', sheet:'History_1kg', data:JSON.stringify(makeRow(prods1kg[k],'1kg')) });
+      }
     }
-    await sleep(300);
 
-        if (history.length) {
+    // ── 4. Company-specific sheets ───────────────────────────────────────
+    // Get all unique brands across ALL products
+    var brandMap = {};
+    products.forEach(function(p) {
+      if (!brandMap[p.brand]) brandMap[p.brand] = { s500:[], s1kg:[] };
+      var ps = detectPackSize(p.name);
+      if (ps && ps.grams >= 400 && ps.grams <= 600) brandMap[p.brand].s500.push(p);
+      else if (ps && ps.grams >= 850 && ps.grams <= 1150) brandMap[p.brand].s1kg.push(p);
+      else {
+        if (CFG.packSize === '500g') brandMap[p.brand].s500.push(p);
+        else if (CFG.packSize === '1kg') brandMap[p.brand].s1kg.push(p);
+      }
+    });
+
+    toast('Writing company sheets...', 'success');
+    var brands = Object.keys(brandMap);
+    for (var b=0; b<brands.length; b++) {
+      var brand    = brands[b];
+      var safeName = brand.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 25);
+      var data500  = brandMap[brand].s500;
+      var data1kg  = brandMap[brand].s1kg;
+
+      // Build combined layout: 500g cols (A-I) | gap (J-K) | 1kg cols (L-T)
+      var HDR500 = HDR.map(function(h){ return '500g — ' + h; });
+      var HDR1kg = HDR.map(function(h){ return '1kg — ' + h; });
+      var fullHdr = HDR500.concat(['','']) .concat(HDR1kg);
+
+      await gasCall({ action:'brandInit', sheet:safeName, data:JSON.stringify(fullHdr) });
+
+      // Write rows — 500g on left, 1kg on right, align by row index
+      var maxRows = Math.max(data500.length, data1kg.length);
+      for (var r=0; r<maxRows; r++) {
+        var left  = data500[r] ? makeRow(data500[r], '500g') : new Array(9).fill('');
+        var gap   = ['', ''];
+        var right = data1kg[r]  ? makeRow(data1kg[r],  '1kg')  : new Array(9).fill('');
+        var fullRow = left.concat(gap).concat(right);
+        await gasCall({ action:'appendBrand', sheet:safeName, data:JSON.stringify(fullRow) });
+      }
+    }
+
+    if (history.length) {
       history[history.length-1].synced = true;
       localStorage.setItem('pp_history', JSON.stringify(history));
     }
     setSyncStatus('synced');
-    toast('Synced to Google Sheets (' + products.length + ' rows)!', 'success');
+    toast('Synced! LiveData + History_500g/1kg + ' + brands.length + ' company sheets', 'success');
 
   } catch(e) {
     setSyncStatus('error');
@@ -1499,6 +1547,7 @@ async function syncToSheets() {
     console.error('[syncToSheets]', e);
   }
 }
+
 
 
 
